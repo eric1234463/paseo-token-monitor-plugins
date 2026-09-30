@@ -9,11 +9,11 @@ import { TokenHistory } from "./client/history";
 export default function contribute(client: PluginClientContext) {
   client.addSurface("token-history", TokenHistory);
   client.addSidebarItem({ id: "token-history", title: "Token usage", icon: "ChartColumn", surface: "token-history" });
-  const pills = new Map<string, { workspaceId: string; provider: string; cacheStore: CacheStore; registration: PluginButtonRegistration }>();
+  const pills = new Map<string, { workspaceId: string; provider: string; cacheStore: CacheStore; registrations: PluginButtonRegistration[] }>();
   const lifetime = new AbortController();
   let subscription: OwnedSubscription<PaseoAgentListResult> | undefined;
   const remove = (id: string) => {
-    pills.get(id)?.registration.remove();
+    for (const registration of pills.get(id)?.registrations ?? []) registration.remove();
     pills.delete(id);
   };
   const register = (agent: PaseoAgent) => {
@@ -27,18 +27,23 @@ export default function contribute(client: PluginClientContext) {
     remove(agent.id);
     const cacheStore = createCacheStore();
     cacheStore.update(agent);
-    let registration: PluginButtonRegistration;
-    const onLabel = (label: string) => registration?.update({ label });
-    const Icon = (props: PluginButtonIconProps) => <UsageIcon {...props} cacheStore={cacheStore} onLabel={onLabel} />;
-    const Content = (props: PluginButtonContentProps) => <UsagePopover {...props} cacheStore={cacheStore} />;
-    registration = client.addComposerPill({
-      id: "usage-limits", workspaceId: agent.workspaceId, agentId: agent.id,
-      button: {
-        title: "Provider usage limits", label: "Limits…", icon: Icon,
-        behavior: { kind: "popover", Content },
-      },
+    const workspaceId = agent.workspaceId;
+    const registrations = (["limits", "tokens"] as const).map((section) => {
+      let registration: PluginButtonRegistration;
+      const onLabel = (label: string) => registration?.update({ label });
+      const Icon = (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} cacheStore={cacheStore} onLabel={onLabel} />;
+      const Content = (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} cacheStore={cacheStore} />;
+      registration = client.addComposerPill({
+        id: `usage-${section}`, workspaceId, agentId: agent.id,
+        button: {
+          title: section === "limits" ? "Provider usage limits" : "Cache ratio and average tokens per second",
+          label: section === "limits" ? "Limits…" : "Tokens…", icon: Icon,
+          behavior: { kind: "popover", Content },
+        },
+      });
+      return registration;
     });
-    pills.set(agent.id, { workspaceId: agent.workspaceId, provider: agent.provider, cacheStore, registration });
+    pills.set(agent.id, { workspaceId: agent.workspaceId, provider: agent.provider, cacheStore, registrations });
   };
   void client.paseo.agents.list({ scope: "active", subscribe: {}, signal: lifetime.signal }).then((directory) => {
     if (lifetime.signal.aborted) return directory.subscription.release();

@@ -39,13 +39,20 @@ export function cacheRatio(provider: SupportedProvider | null, usage: PaseoAgent
 }
 
 export function pillLabel(usage: Usage | null | undefined): string {
-  if (!usage || usage.status !== "available") return "5h — · Week —";
+  if (!usage || usage.status !== "available") return "5h — · W —";
   const { fiveHour, weekly } = quotaWindows(usage);
   const percentage = (window: UsageWindow | null) => {
     const value = remaining(window);
     return value === null ? "—" : `${Math.round(value)}%`;
   };
-  return `5h ${percentage(fiveHour)} · Week ${percentage(weekly)} left`;
+  return `5h ${percentage(fiveHour)} · W ${percentage(weekly)}`;
+}
+
+export function tokenPillLabel(cache: number | null, speed: number | null): string {
+  const rate = speed === null ? "—" : new Intl.NumberFormat("en-US", {
+    notation: "compact", maximumFractionDigits: speed < 100 ? 1 : 0,
+  }).format(speed);
+  return `C${cache === null ? "—" : `${Math.round(cache)}%`} ${rate}tok/s`;
 }
 
 export function formatHkt(timestamp: string | null | undefined): string {

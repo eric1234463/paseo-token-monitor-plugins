@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { cacheRatio, quotaWindows, remaining, pillLabel, providerId, formatHkt } = require("../.test-build/shared/usage.js");
+const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, providerId, formatHkt } = require("../.test-build/shared/usage.js");
 const { parseClaudeUsage, fetchClaudeUsage } = require("../.test-build/server/claude.js");
 const { createCacheStore } = require("../.test-build/client/cache.js");
 
@@ -8,8 +8,8 @@ test("missing windows stay unknown, while an exhausted quota remains zero", () =
   const usage = { status: "available", windows: [{ id: "weekly", remainingPct: 0 }] };
   assert.equal(quotaWindows(usage).fiveHour, null);
   assert.equal(remaining(quotaWindows(usage).weekly), 0);
-  assert.equal(pillLabel(usage), "5h — · Week 0% left");
-  assert.equal(pillLabel({ status: "unavailable", windows: [] }), "5h — · Week —");
+  assert.equal(pillLabel(usage), "5h — · W 0%");
+  assert.equal(pillLabel({ status: "unavailable", windows: [] }), "5h — · W —");
 });
 
 test("remaining percentage derives from used, and invalid numbers stay unknown", () => {
@@ -21,7 +21,16 @@ test("remaining percentage derives from used, and invalid numbers stay unknown",
 });
 
 test("a provider error cannot turn an old reading into a current quota", () => {
-  assert.equal(pillLabel({ status: "error", windows: [{ id: "session", usedPct: 0 }] }), "5h — · Week —");
+  assert.equal(pillLabel({ status: "error", windows: [{ id: "session", usedPct: 0 }] }), "5h — · W —");
+});
+
+test("separate labels preserve unknown and zero metrics within the host's compact pill width", () => {
+  assert.equal(tokenPillLabel(null, null), "C— —tok/s");
+  assert.equal(tokenPillLabel(0, 0), "C0% 0tok/s");
+  assert.equal(tokenPillLabel(80, 27.56), "C80% 27.6tok/s");
+  for (const cache of [null, 0, 100]) for (const speed of [null, 0, 9.99, 99.99, 999, 12345]) {
+    assert.ok(tokenPillLabel(cache, speed).length <= 14);
+  }
 });
 
 test("cache ratio follows provider token semantics and preserves a reported zero", () => {

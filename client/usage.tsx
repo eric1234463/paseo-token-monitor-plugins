@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
-import { formatHkt, pillLabel, providerId, quotaWindows, remaining } from "../shared/usage";
+import { formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
 import type { UsageWindow } from "../shared/usage";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
@@ -42,14 +42,17 @@ function useUsage(agentId: string, hostId: string) {
   return { ...query, provider: id, usage: query.data?.providers.find((usage) => usage.providerId === id) ?? null };
 }
 
-export function UsageIcon(props: PluginButtonIconProps & { cacheStore: CacheStore; onLabel(label: string): void }) {
+export type UsageSection = "limits" | "tokens";
+
+export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection; cacheStore: CacheStore; onLabel(label: string): void }) {
   const agentId = props.context === "agent" ? props.agentId : "";
   const { usage, isPending, isError } = useUsage(agentId, props.host.id);
   const speed = useSpeed(agentId, props.host.id);
   const cache = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
-  const label = `${isPending ? "Limits…" : `${pillLabel(usage)}${isError ? " · stale" : ""}`} · Cache ${cache === null ? "—" : `${Math.round(cache)}%`} · ${speedLabel(speed.isError ? null : speed.data?.tokensPerSecond ?? null)}`;
+  const label = props.section === "tokens" ? tokenPillLabel(cache, speed.isError ? null : speed.data?.tokensPerSecond ?? null)
+    : isPending ? "Limits…" : isError ? "Limits stale" : pillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
-  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel="Account usage">◷</Text>;
+  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{props.section === "limits" ? "◷" : "↯"}</Text>;
 }
 
 function WindowRow({ label, window, theme }: { label: string; window: UsageWindow | null; theme: PluginButtonContentProps["theme"] }) {
@@ -77,7 +80,7 @@ function WindowRow({ label, window, theme }: { label: string; window: UsageWindo
   );
 }
 
-export function UsagePopover({ theme, layout, host, cacheStore, ...context }: PluginButtonContentProps & { cacheStore: CacheStore }) {
+export function UsagePopover({ theme, layout, host, cacheStore, section, ...context }: PluginButtonContentProps & { section: UsageSection; cacheStore: CacheStore }) {
   const agentId = context.context === "agent" ? context.agentId : "";
   const { usage, provider, isPending, isFetching, isError, refetch, data } = useUsage(agentId, host.id);
   const speed = useSpeed(agentId, host.id);
@@ -85,11 +88,12 @@ export function UsagePopover({ theme, layout, host, cacheStore, ...context }: Pl
   const { fiveHour, weekly } = quotaWindows(usage?.status === "available" ? usage : null);
   const extras = usage?.status === "available" ? usage.windows.filter((window) => window !== fiveHour && window !== weekly) : [];
   return (
-    <View style={{ width: layout.compact ? "100%" : 320, gap: 16 }}>
-      <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 16 }}>{usage?.displayName ?? "Provider"} usage</Text>
+    <View style={{ width: layout.compact ? "100%" : 320, gap: 12 }}>
+      <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 16 }}>{usage?.displayName ?? "Provider"} {section === "limits" ? "limits" : "tokens"}</Text>
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-        Account usage across chats · {host.label}{usage?.planLabel ? ` · ${usage.planLabel}` : ""}
+        {section === "limits" ? "Account usage across chats" : "This chat"} · {host.label}{section === "limits" && usage?.planLabel ? ` · ${usage.planLabel}` : ""}
       </Text>
+      {section === "limits" ? <>
       {isPending ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading usage…</Text> : null}
       {isError ? <Text style={{ color: theme.colors.statusWarning }}>Could not refresh usage. Any values shown are the last known reading.</Text> : null}
       {!isPending && usage?.status !== "available" ? <Text style={{ color: theme.colors.foregroundMuted }}>
@@ -98,6 +102,8 @@ export function UsagePopover({ theme, layout, host, cacheStore, ...context }: Pl
       <WindowRow label="5-hour limit" window={fiveHour} theme={theme} />
       <WindowRow label="Weekly limit" window={weekly} theme={theme} />
       {extras.map((window) => <WindowRow key={window.id} label={window.label} window={window} theme={theme} />)}
+      {usage?.sourceLabel ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{usage.sourceLabel}</Text> : null}
+      </> : <>
       <View style={{ gap: 6 }}>
         <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Cache ratio · {cache === null ? "Not provided" : `${Math.round(cache)}%`}</Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
@@ -107,7 +113,7 @@ export function UsagePopover({ theme, layout, host, cacheStore, ...context }: Pl
       <View style={{ gap: 6 }}>
         <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>{speedLabel(speed.isError ? null : speed.data?.tokensPerSecond ?? null)}</Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          Output tokens / full turn elapsed time, including tool and permission waits. Not pure model generation speed.
+          Output tokens / full turn time, including tool and permission waits.
         </Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
           {speed.isError ? "Could not refresh turn speed."
@@ -117,10 +123,10 @@ export function UsagePopover({ theme, layout, host, cacheStore, ...context }: Pl
             : "Complete a new turn after the plugin starts to measure speed."}
         </Text>
       </View>
-      {usage?.sourceLabel ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{usage.sourceLabel}</Text> : null}
+      </>}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, flex: 1 }}>
-          Updated {formatHkt(usage?.fetchedAt ?? data?.fetchedAt)}
+          {section === "limits" ? `Updated ${formatHkt(usage?.fetchedAt ?? data?.fetchedAt)}` : "C = cache ratio · tok/s = Avg output"}
         </Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh provider usage" disabled={isFetching || speed.isFetching}
           onPress={() => { void refetch(); void speed.refetch(); }} style={{ padding: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 }}>

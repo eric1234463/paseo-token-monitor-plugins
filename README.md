@@ -1,26 +1,28 @@
 # Paseo Token Monitor
 
-Shows account usage in the chat composer for Codex, Claude, and Grok.
-The pill displays the remaining five-hour and weekly allowance. Click it for
+Shows two chat composer pills for Codex, Claude, and Grok.
+The limits pill displays the remaining five-hour and weekly allowance
+(`5h N% · W N%`). Click it for
 usage bars, additional provider windows, and reset times in HKT (UTC+8).
 Missing windows display `Not provided`; they never imply zero usage or unlimited access.
 
-The pill also shows `Cache N%` from this chat's latest reported token usage,
+The tokens pill shows cache ratio and average throughput (`C80% 27.6tok/s`).
+`C` means cache ratio, from this chat's latest reported token usage,
 updated through Paseo's agent subscription. This is separate from account limits
 and is not a cumulative chat average. Codex uses cached input / total input tokens
 (latest model request). Claude uses cache reads / (fresh input + cache reads)
 (latest reported turn); Paseo does not expose Claude's cache-write count, so these
 tokens are excluded. Grok's token normalization is not defined by the installed
 SDK, so its cache ratio is unavailable. Missing, zero-total, or invalid counters
-show `Cache —`, while a reported zero cache-read count shows `Cache 0%`.
+show `C—`, while a reported zero cache-read count shows `C0%`.
 
-The pill shows **Avg N tok/s** for a completed turn observed since the plugin
+The tokens pill shows **Avg N tok/s** for a completed turn observed since the plugin
 started. It divides all reported output tokens in that turn by the full elapsed
 time, including tool execution, permission waits, and provider latency. This is
 turn throughput, not pure model generation speed. The popover shows the output
 count, elapsed seconds, and completion time in HKT. A new turn clears the previous
 reading; running, failed, canceled, missing-data, and unobserved turns show
-`Avg — tok/s`. Reloading the plugin clears readings; complete a new turn to measure.
+`—tok/s`. Reloading the plugin clears readings; complete a new turn to measure.
 
 The daemon observes turn lifecycle events and reads only the matching local
 provider session's usage records, reusing the history counter normalization and
