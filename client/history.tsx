@@ -7,6 +7,7 @@ import { dateBounds, historyRpc, periodRange } from "../shared/history";
 import type { HistoryReport, Period } from "../shared/history";
 import { formatHkt } from "../shared/usage";
 import type { SupportedProvider } from "../shared/usage";
+import { DailyTokenChart } from "./bar-chart";
 
 const fields = [["input", "Input"], ["cacheInput", "Cache input"], ["totalInput", "Total input"], ["output", "Output"]] as const;
 const providers = [["codex", "Codex"], ["claude", "Claude"], ["grok", "Grok"]] as const;
@@ -32,8 +33,8 @@ function ModelRow({ row, theme, layout }: { row: HistoryReport["rows"][number] }
 }
 
 export function TokenHistory({ theme, layout, host }: PluginSurfaceProps) {
-  const initial = periodRange("monthly");
-  const [period, setPeriod] = useState<Period | null>("monthly");
+  const initial = periodRange("weekly");
+  const [period, setPeriod] = useState<Period | null>("weekly");
   const [offset, setOffset] = useState(0);
   const [range, setRange] = useState(initial);
   const [from, setFrom] = useState(initial.from);
@@ -42,7 +43,7 @@ export function TokenHistory({ theme, layout, host }: PluginSurfaceProps) {
   const [provider, setProvider] = useState<SupportedProvider>("codex");
   const read = useRpc(historyRpc);
   const query = useQuery({
-    queryKey: ["token-history", host.id, range.from, range.to],
+    queryKey: ["token-history", host.id, range.from, range.to, "daily-totals"],
     queryFn: () => read(range), staleTime: 60_000, retry: false,
   });
   const rows = query.data?.rows.filter((row) => row.provider === provider) ?? [];
@@ -86,7 +87,7 @@ export function TokenHistory({ theme, layout, host }: PluginSurfaceProps) {
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {button("Daily", () => choosePeriod("daily"), period === "daily")}
-        {button("Weekly", () => choosePeriod("weekly"), period === "weekly")}
+        {button("7 days", () => choosePeriod("weekly"), period === "weekly")}
         {button("Monthly", () => choosePeriod("monthly"), period === "monthly")}
         {button("Previous period", () => shift(-1), false, period === null)}
         {button("Next period", () => shift(1), false, period === null)}
@@ -123,6 +124,8 @@ export function TokenHistory({ theme, layout, host }: PluginSurfaceProps) {
           <Text style={{ color: source?.status === "error" || source?.status === "partial" ? theme.colors.statusWarning : theme.colors.foregroundMuted, fontSize: 12 }}>
             {source?.message} {source?.files ? `(${source.files} files)` : ""}
           </Text>
+          {period === "weekly" || period === "monthly" ? <DailyTokenChart days={query.data.days} provider={provider}
+            from={range.from} to={range.to} complete={source?.status === "available"} theme={theme} /> : null}
           {rows.length ? rows.map((row) => <ModelRow key={row.model} row={row} theme={theme} layout={layout} />)
             : <Text style={{ color: theme.colors.foregroundMuted }}>{source?.status === "available" ? "No usage recorded in this date range." : "Token history not provided."}</Text>}
         </View>

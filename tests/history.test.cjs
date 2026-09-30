@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const { mkdtemp, mkdir, writeFile, rm } = require("node:fs/promises");
 const { tmpdir } = require("node:os");
 const { join } = require("node:path");
-const { dateBounds, periodRange } = require("../.test-build/shared/history.js");
-const { claudeRecord, codexParser, grokRecords, aggregateHistory, createHistoryReader } = require("../.test-build/server/history.js");
+const { dateBounds, periodRange, dailySeries } = require("../.test-build/shared/history.js");
+const { claudeRecord, codexParser, grokRecords, aggregateHistory, aggregateDailyHistory, createHistoryReader } = require("../.test-build/server/history.js");
 
 const claude = (id, at, output = 10, model = "claude-sonnet") => ({
   type: "assistant", timestamp: at,
@@ -16,9 +16,11 @@ const codex = (at, input, cached, output, last = { input_tokens: input, cached_i
   } },
 });
 
-test("HKT ranges are inclusive calendar dates, weekly starts Monday, and months have real lengths", () => {
+test("HKT ranges are inclusive, weekly is the latest seven days, and months have real lengths", () => {
   assert.deepEqual(periodRange("daily", "2026-09-30"), { from: "2026-09-30", to: "2026-09-30" });
-  assert.deepEqual(periodRange("weekly", "2026-09-30"), { from: "2026-09-28", to: "2026-10-04" });
+  assert.deepEqual(periodRange("weekly", "2026-09-30"), { from: "2026-09-24", to: "2026-09-30" });
+  assert.deepEqual(periodRange("weekly", "2026-09-30", -1), { from: "2026-09-17", to: "2026-09-23" });
+  assert.deepEqual(periodRange("weekly", "2026-01-03"), { from: "2025-12-28", to: "2026-01-03" });
   assert.deepEqual(periodRange("monthly", "2026-01-31", 1), { from: "2026-02-01", to: "2026-02-28" });
   assert.deepEqual(periodRange("monthly", "2024-02-02"), { from: "2024-02-01", to: "2024-02-29" });
   assert.deepEqual(dateBounds("2026-09-30", "2026-09-30"), {
@@ -26,6 +28,51 @@ test("HKT ranges are inclusive calendar dates, weekly starts Monday, and months 
   });
   assert.throws(() => dateBounds("2026-02-30", "2026-03-01"));
   assert.throws(() => dateBounds("2026-10-01", "2026-09-01"));
+});
+
+test("daily totals use HKT dates, combine models, deduplicate records and include cache only once", () => {
+  const records = [
+    claudeRecord(claude("before", "2026-09-28T15:59:59Z", 999)),
+    claudeRecord(claude("a", "2026-09-28T16:00:00Z", 10)),
+    claudeRecord(claude("a", "2026-09-28T16:01:00Z", 30)),
+    claudeRecord(claude("b", "2026-09-29T15:59:59Z", 20, "claude-opus")),
+    claudeRecord(claude("c", "2026-09-29T16:00:00Z", 40)),
+    claudeRecord(claude("after", "2026-09-30T16:00:00Z", 999)),
+    ...grokRecords({ turns: [{ endedAt: "2026-09-29T16:00:00Z", modelUsage: {
+      "grok-test": { inputTokens: 100, cachedReadTokens: 80, outputTokens: 10 },
+    } }] }),
+  ];
+  const days = aggregateDailyHistory([...records, ...records], "2026-09-29", "2026-09-30");
+  const points = dailySeries(days, "claude", "2026-09-29", "2026-09-30", true);
+  assert.deepEqual(points.map(row => [row.input, row.cacheInput, row.output, row.totalTokens]), [
+    [100, 300, 50, 450], [50, 150, 40, 240],
+  ]);
+  const claudeDays = days.filter(row => row.provider === "claude");
+  assert.deepEqual(claudeDays.map(row => [row.date, row.totalInput, row.output, row.totalTokens]), [
+    ["2026-09-29", 400, 50, 450], ["2026-09-30", 200, 40, 240],
+  ]);
+  assert.equal(days.find(row => row.provider === "grok").totalTokens, 110);
+  const rows = aggregateHistory(records, "2026-09-29", "2026-09-30").filter(row => row.provider === "claude");
+  assert.equal(claudeDays.reduce((sum, row) => sum + row.totalTokens, 0), rows.reduce((sum, row) => sum + row.totalInput + row.output, 0));
+});
+
+test("daily chart fills all calendar days, isolates provider tabs, and preserves missing counters or coverage", () => {
+  const incomplete = claude("unknown", "2026-09-29T16:00:00Z");
+  delete incomplete.message.usage.cache_read_input_tokens;
+  const days = aggregateDailyHistory([claudeRecord(incomplete)], "2026-09-29", "2026-09-30");
+  assert.equal(days[0].totalTokens, null);
+  assert.deepEqual(dailySeries(days, "claude", "2026-09-29", "2026-09-30", true).map(({ date, totalTokens }) => ({ date, totalTokens })), [
+    { date: "2026-09-29", totalTokens: 0 }, { date: "2026-09-30", totalTokens: null },
+  ]);
+  assert.deepEqual(dailySeries(days, "grok", "2026-09-29", "2026-09-30", false).map(({ date, totalTokens }) => ({ date, totalTokens })), [
+    { date: "2026-09-29", totalTokens: null }, { date: "2026-09-30", totalTokens: null },
+  ]);
+  assert.deepEqual(dailySeries(days, "grok", "2026-09-29", "2026-09-29", true)[0], {
+    date: "2026-09-29", input: 0, cacheInput: 0, output: 0, totalTokens: 0,
+  });
+  assert.equal(dailySeries(days, "grok", "2026-09-29", "2026-09-29", false)[0].cacheInput, null);
+  assert.equal(dailySeries(days, "claude", "2026-09-30", "2026-09-30", true)[0].cacheInput, null);
+  assert.equal(dailySeries([], "codex", "2024-02-01", "2024-02-29", true).length, 29);
 });
 
 test("Claude includes cache writes as non-cache-read input and deduplicates streaming/forked messages", () => {
@@ -97,10 +144,12 @@ test("history reader reloads changed files, removes deleted data, and reports ma
     const read = createHistoryReader(new AbortController().signal, roots);
     const first = await read({ from: "2026-09-30", to: "2026-09-30" });
     assert.equal(first.rows[0].output, 10);
+    assert.equal(first.days[0].totalTokens, 210);
     assert.equal(first.sources.find(s => s.provider === "codex").status, "missing");
     assert.equal(first.sources.find(s => s.provider === "grok").status, "error");
     await writeFile(file, JSON.stringify(claude("first", "2026-09-30T01:00:00Z", 40)) + "\n");
     assert.equal((await read({ from: "2026-09-30", to: "2026-09-30" })).rows[0].output, 40);
+    assert.equal((await read({ from: "2026-09-30", to: "2026-09-30" })).days[0].totalTokens, 240);
     await rm(file);
     assert.equal((await read({ from: "2026-09-30", to: "2026-09-30" })).rows.length, 0);
   } finally { await rm(directory, { recursive: true, force: true }); }

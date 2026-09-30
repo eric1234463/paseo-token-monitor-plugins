@@ -3,7 +3,7 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
-import { dateBounds } from "../shared/history";
+import { dateBounds, hktDate } from "../shared/history";
 import type { HistoryReport, TokenTotals } from "../shared/history";
 import type { SupportedProvider } from "../shared/usage";
 
@@ -80,15 +80,19 @@ export function grokRecords(value: unknown): UsageRecord[] {
   return records;
 }
 
-export function aggregateHistory(records: Iterable<UsageRecord>, from: string, to: string): HistoryReport["rows"] {
-  const { start, end } = dateBounds(from, to);
+function uniqueRecords(records: Iterable<UsageRecord>) {
   const unique = new Map<string, UsageRecord>();
   for (const row of records) {
     const old = unique.get(row.id);
     if (!old || (row.output ?? -1) > (old.output ?? -1)) unique.set(row.id, row);
   }
+  return unique.values();
+}
+
+export function aggregateHistory(records: Iterable<UsageRecord>, from: string, to: string): HistoryReport["rows"] {
+  const { start, end } = dateBounds(from, to);
   const totals = new Map<string, HistoryReport["rows"][number]>();
-  for (const row of unique.values()) {
+  for (const row of uniqueRecords(records)) {
     if (row.timestamp < start || row.timestamp >= end) continue;
     const key = `${row.provider}:${row.model}`;
     const total = totals.get(key);
@@ -96,6 +100,26 @@ export function aggregateHistory(records: Iterable<UsageRecord>, from: string, t
     else for (const field of ["input", "cacheInput", "totalInput", "output"] as const) total[field] = plus(total[field], row[field]);
   }
   return [...totals.values()].sort((a, b) => a.provider.localeCompare(b.provider) || (b.totalInput ?? -1) - (a.totalInput ?? -1) || a.model.localeCompare(b.model));
+}
+
+export function aggregateDailyHistory(records: Iterable<UsageRecord>, from: string, to: string): HistoryReport["days"] {
+  const { start, end } = dateBounds(from, to);
+  const totals = new Map<string, HistoryReport["days"][number]>();
+  for (const row of uniqueRecords(records)) {
+    if (row.timestamp < start || row.timestamp >= end) continue;
+    const date = hktDate(row.timestamp);
+    const key = `${row.provider}:${date}`;
+    const total = totals.get(key);
+    if (!total) totals.set(key, { provider: row.provider, date,
+      input: row.input, cacheInput: row.cacheInput, totalInput: row.totalInput, output: row.output,
+      totalTokens: plus(row.totalInput, row.output),
+    });
+    else {
+      for (const field of ["input", "cacheInput", "totalInput", "output"] as const) total[field] = plus(total[field], row[field]);
+      total.totalTokens = plus(total.totalInput, total.output);
+    }
+  }
+  return [...totals.values()].sort((a, b) => a.provider.localeCompare(b.provider) || a.date.localeCompare(b.date));
 }
 
 export async function* files(directory: string, provider: SupportedProvider): AsyncGenerator<string> {
@@ -191,6 +215,6 @@ export function createHistoryReader(signal: AbortSignal, roots: Record<Supported
     dateBounds(from, to);
     scan ??= load().finally(() => { scan = undefined; });
     const { records, sources } = await scan;
-    return { rows: aggregateHistory(records, from, to), sources, fetchedAt: new Date().toISOString() };
+    return { rows: aggregateHistory(records, from, to), days: aggregateDailyHistory(records, from, to), sources, fetchedAt: new Date().toISOString() };
   };
 }

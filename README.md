@@ -35,10 +35,21 @@ visible pills refresh them every five seconds without calling a provider API.
 
 Open **Token usage** in the sidebar and select the Codex, Claude, or Grok tab.
 Only the selected provider's model totals and coverage are shown; the date range
-is shared across tabs. Daily, Weekly, and Monthly select calendar
-periods in HKT; weeks start Monday. Use Previous/Next period to browse history,
+is shared across tabs. The default **7 days** includes today and the preceding
+six days in HKT; Previous/Next moves it by seven days. Daily selects one day,
+and Monthly selects a calendar month. Use Previous/Next period to browse history,
 or enter inclusive From/To dates (`YYYY-MM-DD`) and Apply range. Results are
 grouped by provider and model, with Input, Cache input, Total input, and Output.
+
+The 7-day and Monthly views include a daily stacked bar chart for the selected
+provider, combining all its models, with separate Input, Cache input, and Output
+segments and a color legend. Each day's total is **Total input + Output**; cache
+reads are already in Total input and are not added twice. Dates use HKT, and
+today's bar can still grow. Select a bar for its exact total and breakdown; narrow screens
+scroll horizontally. Empty days show zero only with readable source coverage;
+missing counters or incomplete coverage show `—`. A known total with a missing
+breakdown uses a gray bar. Totals reflect retained local
+logs, with the same deduplication and coverage limits as the model rows.
 
 - **Input** is non-cache-read input. For Claude it includes fresh input and cache
   writes; for Codex/Grok it is total input minus cache reads.

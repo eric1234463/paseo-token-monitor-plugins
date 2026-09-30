@@ -1,6 +1,7 @@
 import { defineRpc } from "@getpaseo/plugin";
 import type { RpcOutput } from "@getpaseo/plugin";
 import { z } from "zod";
+import type { SupportedProvider } from "./usage";
 
 export type Period = "daily" | "weekly" | "monthly";
 const DAY = 86_400_000;
@@ -27,7 +28,7 @@ export function periodRange(period: Period, anchor = hktDate(Date.now()), offset
     end = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + offset + 1, 1);
   } else {
     const days = period === "weekly" ? 7 : 1;
-    start = date.getTime() - (period === "weekly" ? (date.getUTCDay() + 6) % 7 * DAY : 0) + offset * days * DAY;
+    start = date.getTime() - (days - 1) * DAY + offset * days * DAY;
     end = start + days * DAY;
   }
   return { from: new Date(start).toISOString().slice(0, 10), to: new Date(end - DAY).toISOString().slice(0, 10) };
@@ -42,6 +43,9 @@ export const historyRpc = defineRpc({
     .refine(({ from, to }) => from <= to, { message: "From must be on or before To." }),
   output: z.object({
     rows: z.array(tokenTotalsSchema.extend({ provider: z.enum(["claude", "codex", "grok"]), model: z.string() })),
+    days: z.array(tokenTotalsSchema.extend({
+      provider: z.enum(["claude", "codex", "grok"]), date: z.string().refine(validDate), totalTokens: count,
+    })),
     sources: z.array(z.object({
       provider: z.enum(["claude", "codex", "grok"]),
       status: z.enum(["available", "missing", "partial", "error"]),
@@ -51,3 +55,17 @@ export const historyRpc = defineRpc({
   }),
 });
 export type HistoryReport = RpcOutput<typeof historyRpc>;
+
+export function dailySeries(days: HistoryReport["days"], provider: SupportedProvider, from: string, to: string, complete: boolean) {
+  const { start, end } = dateBounds(from, to);
+  const byDate = new Map(days.filter((row) => row.provider === provider).map((row) => [row.date, row]));
+  const points: Pick<HistoryReport["days"][number], "date" | "input" | "cacheInput" | "output" | "totalTokens">[] = [];
+  for (let at = start; at < end; at += DAY) {
+    const date = hktDate(at);
+    const row = byDate.get(date);
+    const empty = complete ? 0 : null;
+    points.push(row ? { date, input: row.input, cacheInput: row.cacheInput, output: row.output, totalTokens: row.totalTokens }
+      : { date, input: empty, cacheInput: empty, output: empty, totalTokens: empty });
+  }
+  return points;
+}
