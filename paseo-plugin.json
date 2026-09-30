@@ -1,0 +1,7 @@
+{
+  "id": "paseo-token-monitor-plugins",
+  "description": "Show Codex, Claude, and Grok account usage and reset times in the chat composer.",
+  "requirements": {
+    "paseo": ">=0.10.1"
+  }
+}
