@@ -16,20 +16,26 @@ tokens are excluded. Grok's token normalization is not defined by the installed
 SDK, so its cache ratio is unavailable. Missing, zero-total, or invalid counters
 show `C—`, while a reported zero cache-read count shows `C0%`.
 
-The tokens pill shows **Avg N tok/s** for a completed turn observed since the plugin
-started. It divides all reported output tokens in that turn by the full elapsed
+The tokens pill shows **Avg N tok/s** for the last completed turn. It divides
+all reported output tokens in that turn by the full elapsed
 time, including tool execution, permission waits, and provider latency. This is
 turn throughput, not pure model generation speed. The popover shows the output
-count, elapsed seconds, and completion time in HKT. A new turn clears the previous
-reading; running, failed, canceled, missing-data, and unobserved turns show
-`—tok/s`. Reloading the plugin clears readings; complete a new turn to measure.
+count, elapsed seconds, and completion time in HKT. A running, failed, canceled,
+or missing-data turn keeps the previous completed reading; the popover labels it
+**Last completed turn**. Without a usable completed reading, the pill shows `—tok/s`.
+Reloads restore saved readings for Claude, Codex, and Grok. Older Codex turns can
+also be recovered from local `task_complete` timestamps and `duration_ms`, including
+archived sessions. Older Claude/Grok turns without saved timing remain unavailable.
 
 The daemon observes turn lifecycle events and reads only the matching local
 provider session's usage records, reusing the history counter normalization and
 deduplication. This includes every Codex request in the turn rather than just
 Paseo's last-request usage. Counts include provider-reported reasoning output
-when already included, and exclude input/cache tokens. Readings stay in memory;
-visible pills refresh them every five seconds without calling a provider API.
+when already included, and exclude input/cache tokens. Completed readings are
+saved atomically under `~/.cache/paseo-token-monitor-plugins/speed/`, matched by
+agent, provider, and session ID, with private file permissions. Only token counts,
+duration, completion time, and identifiers are saved; no chat content or credentials.
+Visible pills refresh them every five seconds without calling a provider API.
 
 ## Token history sidebar
 

@@ -117,11 +117,14 @@ export function UsagePopover({ theme, layout, host, cacheStore, section, ...cont
         </Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
           {speed.isError ? "Could not refresh turn speed."
-            : speed.data?.status === "available" ? `${speed.data.outputTokens?.toLocaleString()} output tokens · ${((speed.data.elapsedMs ?? 0) / 1000).toFixed(1)}s · Completed ${formatHkt(speed.data.completedAt)}`
-            : speed.data?.status === "running" ? "Available after this turn completes."
+            : speed.data?.completedAt ? `Last completed turn · ${speed.data.outputTokens?.toLocaleString()} output tokens · ${((speed.data.elapsedMs ?? 0) / 1000).toFixed(1)}s · Completed ${formatHkt(speed.data.completedAt)}`
+            : speed.data?.status === "running" ? "No completed reading yet. Available after this turn completes."
             : speed.data?.status === "unavailable" ? "This turn did not complete or matching token usage is unavailable."
-            : "Complete a new turn after the plugin starts to measure speed."}
+            : "No completed turn with matching token usage and duration is available."}
         </Text>
+        {speed.data?.status === "running" && speed.data.completedAt ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+          New turn running; showing the last completed turn until it finishes.
+        </Text> : null}
       </View>
       </>}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
