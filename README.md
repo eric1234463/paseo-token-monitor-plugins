@@ -114,7 +114,7 @@ time does not itself prove the allowance has refreshed.
 
 ## Install
 
-Requires Paseo daemon and client 0.10.1 or later with plugins enabled.
+Requires Paseo daemon and client 0.10.0 or later with plugins enabled.
 
 ```sh
 npm install
