@@ -1,5 +1,5 @@
 import type { PaseoApi } from "@getpaseo/client";
-import { aggregateContext, contextTextOf } from "../shared/context";
+import { aggregateContext, contextTextOf, contextToolSplit, hiddenOverheadTokens } from "../shared/context";
 import type { ContextBreakdown, ContextItem } from "../shared/context";
 
 const PAGE_LIMIT = 200;
@@ -29,15 +29,24 @@ export function createContextReader(signal: AbortSignal) {
         const row = (entry as { item?: Record<string, unknown> }).item;
         if (!row || typeof row !== "object") continue;
         const type = typeof row.type === "string" ? row.type : "unknown";
-        items.push({ type, text: contextTextOf(row) });
+        const name = typeof row.name === "string" ? row.name : undefined;
+        if (type === "tool_call") {
+          const split = contextToolSplit(row);
+          items.push({ type, text: contextTextOf(row), name, input: split.input, output: split.output });
+        } else {
+          items.push({ type, text: contextTextOf(row) });
+        }
       }
       if (!page.hasOlder || !page.startCursor) break;
       if (seen === MAX_PAGES - 1) { truncated = true; break; }
       page = await ref.timeline.refetch({ direction: "before", cursor: page.startCursor, limit: PAGE_LIMIT, projection: "canonical" });
     }
 
-    const { parts, estimatedTokens, itemCount } = aggregateContext(items);
-    return { usedTokens, maxTokens, estimatedTokens, itemCount, truncated, parts, fetchedAt: new Date().toISOString() };
+    const { parts, estimatedTokens, itemCount, topTools } = aggregateContext(items);
+    const overheadTokens = usedTokens !== null && maxTokens !== null
+      ? hiddenOverheadTokens(usedTokens, estimatedTokens)
+      : null;
+    return { usedTokens, maxTokens, estimatedTokens, itemCount, truncated, parts, topTools, overheadTokens, fetchedAt: new Date().toISOString() };
   };
 }
 

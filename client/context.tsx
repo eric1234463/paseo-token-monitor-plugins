@@ -41,7 +41,23 @@ function PartRow({ part, theme }: { part: ContextBreakdown["parts"][number]; the
         {share === null || share <= 0 ? null : <View style={{ height: 6, width: `${share}%`, backgroundColor: color }} />}
       </View>
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-        ~{part.tokens.toLocaleString("en-US")} tokens · {part.items} item{part.items === 1 ? "" : "s"}
+        ~{part.tokens.toLocaleString("en-US")} tokens · {part.items} item{part.items === 1 ? "" : "s"}{part.inputTokens !== null && part.outputTokens !== null
+          ? ` · in ~${part.inputTokens.toLocaleString("en-US")} / out ~${part.outputTokens.toLocaleString("en-US")}` : ""}
+      </Text>
+    </View>
+  );
+}
+
+function ToolRow({ tool, theme }: { tool: ContextBreakdown["topTools"][number]; theme: PluginButtonContentProps["theme"] }) {
+  const share = tool.sharePct;
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+      <Text style={{ color: theme.colors.foreground, flex: 1 }} numberOfLines={1}>{tool.name}</Text>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontVariant: ["tabular-nums"] }}>
+        ~{tool.tokens.toLocaleString("en-US")} · {tool.calls}×{share === null ? "" : ` · ${share.toFixed(1)}%`}
+      </Text>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontVariant: ["tabular-nums"] }}>
+        in ~{tool.inputTokens.toLocaleString("en-US")} / out ~{tool.outputTokens.toLocaleString("en-US")}
       </Text>
     </View>
   );
@@ -54,6 +70,8 @@ export function ContextPopover({ theme, layout, host, ...context }: PluginButton
   const max = data?.maxTokens ?? null;
   const authoritative = used !== null && max !== null && max > 0;
   const usedPct = authoritative ? Math.min(100, used / max * 100) : null;
+  const overhead = data?.overheadTokens ?? null;
+  const overheadPct = authoritative && overhead !== null ? Math.min(100, overhead / max! * 100) : null;
   return (
     <View style={{ width: layout.compact ? "100%" : 320, gap: 12 }}>
       <Text style={{ color: theme.colors.foreground, fontWeight: "600", fontSize: 16 }}>Context</Text>
@@ -83,11 +101,33 @@ export function ContextPopover({ theme, layout, host, ...context }: PluginButton
           </Text>}
         </View>
         {data.parts.filter((row) => row.items > 0).map((row) => <PartRow key={row.part} part={row} theme={theme} />)}
+        {overhead !== null && overheadPct !== null ? <View style={{ gap: 6 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+            <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>System prompt & definitions</Text>
+            <Text style={{ color: theme.colors.foreground, fontVariant: ["tabular-nums"] }}>
+              {overheadPct.toFixed(1)}%
+            </Text>
+          </View>
+          <View accessibilityRole="progressbar" accessibilityLabel="System prompt and tool definition overhead"
+            accessibilityValue={{ min: 0, max: 100, now: overheadPct, text: `${overheadPct.toFixed(1)}% of context` }}
+            style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surface2, overflow: "hidden" }}>
+            {overheadPct <= 0 ? null : <View style={{ height: 6, width: `${overheadPct}%`, backgroundColor: theme.colors.statusWarning }} />}
+          </View>
+          <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+            ~{overhead.toLocaleString("en-US")} tokens · reported use minus visible estimate
+          </Text>
+        </View> : null}
+        {data.topTools.length > 0 ? <View style={{ gap: 6 }}>
+          <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Top tools</Text>
+          {data.topTools.slice(0, 6).map((tool) => <ToolRow key={tool.name} tool={tool} theme={theme} />)}
+        </View> : null}
         {data.truncated ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>
           Long chat: only the latest {data.itemCount} items were scanned, so shares skew toward recent content.
         </Text> : null}
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          Estimates from visible chat text (~4 chars/token). System prompt and tool definitions live provider-side and are not included.
+          Estimates from visible chat text (~4 chars/token). MCP calls are split out by the mcp__ tool-name prefix.
+          System prompt & definitions is reported window use minus the visible estimate; it covers the system prompt,
+          tool definitions and other provider-side content.
         </Text>
       </> : null}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
