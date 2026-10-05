@@ -1,6 +1,7 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import type { PaseoAgent, OwnedSubscription, PaseoAgentListResult } from "@getpaseo/client";
 import { UsageIcon, UsagePopover } from "./client/usage";
+import { ContextIcon, ContextPopover } from "./client/context";
 import { providerId } from "./shared/usage";
 import { createCacheStore } from "./client/cache";
 import type { CacheStore } from "./client/cache";
@@ -28,18 +29,20 @@ export default function contribute(client: PluginClientContext) {
     const cacheStore = createCacheStore();
     cacheStore.update(agent);
     const workspaceId = agent.workspaceId;
-    const registrations = (["limits", "tokens"] as const).map((section) => {
+    const registrations = (["limits", "tokens", "context"] as const).map((section) => {
       let registration: PluginButtonRegistration;
       const onLabel = (label: string) => registration?.update({ label });
-      const Icon = (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} cacheStore={cacheStore} onLabel={onLabel} />;
-      const Content = (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} cacheStore={cacheStore} />;
+      const titles = { limits: "Provider usage limits", tokens: "Cache ratio and average tokens per second", context: "Context window breakdown" };
+      const labels = { limits: "Limits…", tokens: "Tokens…", context: "Context…" };
+      const Icon = section === "context"
+        ? (props: PluginButtonIconProps) => <ContextIcon {...props} onLabel={onLabel} />
+        : (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} cacheStore={cacheStore} onLabel={onLabel} />;
+      const Content = section === "context"
+        ? (props: PluginButtonContentProps) => <ContextPopover {...props} />
+        : (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} cacheStore={cacheStore} />;
       registration = client.addComposerPill({
         id: `usage-${section}`, workspaceId, agentId: agent.id,
-        button: {
-          title: section === "limits" ? "Provider usage limits" : "Cache ratio and average tokens per second",
-          label: section === "limits" ? "Limits…" : "Tokens…", icon: Icon,
-          behavior: { kind: "popover", Content },
-        },
+        button: { title: titles[section], label: labels[section], icon: Icon, behavior: { kind: "popover", Content } },
       });
       return registration;
     });
