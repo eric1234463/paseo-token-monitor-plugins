@@ -50,15 +50,48 @@ function PartRow({ part, theme }: { part: ContextBreakdown["parts"][number]; the
 
 function ToolRow({ tool, theme }: { tool: ContextBreakdown["topTools"][number]; theme: PluginButtonContentProps["theme"] }) {
   const share = tool.sharePct;
+  const color = share !== null && share >= 50 ? theme.colors.statusWarning : theme.colors.accent;
   return (
-    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-      <Text style={{ color: theme.colors.foreground, flex: 1 }} numberOfLines={1}>{tool.name}</Text>
-      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontVariant: ["tabular-nums"] }}>
-        ~{tool.tokens.toLocaleString("en-US")} · {tool.calls}×{share === null ? "" : ` · ${share.toFixed(1)}%`}
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+        <Text style={{ color: theme.colors.foreground, fontWeight: "600", flex: 1 }} numberOfLines={1}>{tool.name}</Text>
+        <Text style={{ color: theme.colors.foreground, fontVariant: ["tabular-nums"] }}>
+          {share === null ? "—" : `${share.toFixed(1)}%`}
+        </Text>
+      </View>
+      <View accessibilityRole="progressbar" accessibilityLabel={`${tool.name} share`}
+        accessibilityValue={share === null ? { text: "No content" } : { min: 0, max: 100, now: share, text: `${share.toFixed(1)}% of context` }}
+        style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surface2, overflow: "hidden" }}>
+        {share === null || share <= 0 ? null : <View style={{ height: 6, width: `${share}%`, backgroundColor: color }} />}
+      </View>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        ~{tool.tokens.toLocaleString("en-US")} tokens · {tool.calls} call{tool.calls === 1 ? "" : "s"} · in ~{tool.inputTokens.toLocaleString("en-US")} / out ~{tool.outputTokens.toLocaleString("en-US")}
       </Text>
-      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontVariant: ["tabular-nums"] }}>
-        in ~{tool.inputTokens.toLocaleString("en-US")} / out ~{tool.outputTokens.toLocaleString("en-US")}
+    </View>
+  );
+}
+
+function SkillsSection({ data, theme }: { data: ContextBreakdown; theme: PluginButtonContentProps["theme"] }) {
+  const used = data.skills.filter((skill) => skill.used);
+  return (
+    <View style={{ gap: 6 }}>
+      <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>
+        Skills{data.skillsAvailable ? ` (${used.length} of ${data.skills.length} used)` : ""}
       </Text>
+      {!data.skillsAvailable ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        Skill list unavailable for this provider.
+      </Text> : used.length === 0 ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        {data.skills.length === 0 ? "No skills loaded in this session." : `No skills used in this chat yet · ${data.skills.length} loaded.`}
+      </Text> : used.map((skill) => <View key={skill.name}
+        style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+        <Text style={{ color: theme.colors.foreground, flex: 1 }} numberOfLines={1}>{skill.name}</Text>
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, fontVariant: ["tabular-nums"] }}>
+          ~{skill.tokens.toLocaleString("en-US")}
+        </Text>
+      </View>)}
+      {data.skillsAvailable && used.length > 0 ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        ~{data.skillTokens.toLocaleString("en-US")} tokens · names and descriptions only
+      </Text> : null}
     </View>
   );
 }
@@ -100,6 +133,11 @@ export function ContextPopover({ theme, layout, host, ...context }: PluginButton
             Provider did not report window usage; totals are estimated from visible timeline.
           </Text>}
         </View>
+        {data.topTools.length > 0 ? <View style={{ gap: 8 }}>
+          <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Top tools</Text>
+          {data.topTools.slice(0, 6).map((tool) => <ToolRow key={tool.name} tool={tool} theme={theme} />)}
+        </View> : null}
+        <SkillsSection data={data} theme={theme} />
         {data.parts.filter((row) => row.items > 0).map((row) => <PartRow key={row.part} part={row} theme={theme} />)}
         {overhead !== null && overheadPct !== null ? <View style={{ gap: 6 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
@@ -117,17 +155,14 @@ export function ContextPopover({ theme, layout, host, ...context }: PluginButton
             ~{overhead.toLocaleString("en-US")} tokens · reported use minus visible estimate
           </Text>
         </View> : null}
-        {data.topTools.length > 0 ? <View style={{ gap: 6 }}>
-          <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Top tools</Text>
-          {data.topTools.slice(0, 6).map((tool) => <ToolRow key={tool.name} tool={tool} theme={theme} />)}
-        </View> : null}
         {data.truncated ? <Text style={{ color: theme.colors.statusWarning, fontSize: 12 }}>
           Long chat: only the latest {data.itemCount} items were scanned, so shares skew toward recent content.
         </Text> : null}
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
           Estimates from visible chat text (~4 chars/token). MCP calls are split out by the mcp__ tool-name prefix.
+          Skill tokens cover names and descriptions only; full skill bodies live provider-side.
           System prompt & definitions is reported window use minus the visible estimate; it covers the system prompt,
-          tool definitions and other provider-side content.
+          skill bodies, tool definitions and other provider-side content.
         </Text>
       </> : null}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>

@@ -16,6 +16,12 @@ tokens are excluded. Grok's token normalization is not defined by the installed
 SDK, so its cache ratio is unavailable. Missing, zero-total, or invalid counters
 show `C—`, while a reported zero cache-read count shows `C0%`.
 
+The Tokens popover adds a Cache expiry countdown (`Expires in M:SS`) for Claude
+and Codex. It restarts on each agent update that reports usable cache counters
+and assumes a 5-minute idle TTL: after 5 minutes without cache activity it shows
+Expired. This is a client-side heuristic — Paseo does not expose the provider's
+real cache expiry timestamp — so treat it as a freshness hint, not a billing signal.
+
 The tokens pill shows **Avg N tok/s** for the last completed turn. It divides
 all reported output tokens in that turn by the full elapsed
 time, including tool execution, permission waits, and provider latency. This is

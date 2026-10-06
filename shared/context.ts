@@ -203,10 +203,69 @@ export function aggregateContext(items: Iterable<ContextItem>): { parts: Context
   return { parts, estimatedTokens, itemCount, topTools };
 }
 
+export interface ContextSkillTotal {
+  name: string;
+  tokens: number;
+  /** True when the skill was invoked in the scanned timeline (tool call or /mention). */
+  used: boolean;
+}
+
+/** Max skill rows returned; bounds the RPC payload. */
+export const MAX_SKILLS = 30;
+
 /**
- * Provider-side content the timeline cannot see (system prompt, tool definitions,
- * native overhead) approximated as reported window use minus visible estimate.
- * Null without authoritative usage; clamped at zero when the estimate overshoots.
+ * Estimate loaded skills' definition-list cost from name, description and
+ * argument hint. Full SKILL.md bodies live provider-side and are NOT included;
+ * they sit inside the hidden overhead residual.
+ */
+const normalizeSkillName = (value: string): string => value.trim().toLowerCase();
+
+/**
+ * True when a loaded skill was invoked in this chat: a tool call whose name
+ * matches (exactly or as a `__`-separated segment), or a `/name` mention in a
+ * user message.
+ */
+export function isSkillUsed(skillName: string, toolNames: Iterable<string>, userTexts: Iterable<string>): boolean {
+  const want = normalizeSkillName(skillName);
+  if (!want) return false;
+  for (const raw of toolNames) {
+    const name = normalizeSkillName(raw);
+    if (name === want || name.split(/__+/).includes(want)) return true;
+  }
+  for (const raw of userTexts) {
+    if (raw.toLowerCase().includes(`/${want}`)) return true;
+  }
+  return false;
+}
+
+export function aggregateSkills(
+  entries: Array<{ name?: unknown; description?: unknown; argumentHint?: unknown }>,
+  usage?: { toolNames?: Iterable<string>; userTexts?: Iterable<string> },
+): { skills: ContextSkillTotal[]; skillTokens: number } {
+  const tools = usage?.toolNames !== undefined ? [...usage.toolNames] : null;
+  const texts = usage?.userTexts !== undefined ? [...usage.userTexts] : null;
+  const skills = entries
+    .filter((entry) => typeof entry.name === "string" && entry.name.trim().length > 0)
+    .map((entry) => {
+      const name = (entry.name as string).trim().slice(0, 200);
+      const text = [name,
+        typeof entry.description === "string" ? entry.description : "",
+        typeof entry.argumentHint === "string" ? entry.argumentHint : "",
+      ].filter(Boolean).join("\n");
+      const used = tools !== null && texts !== null ? isSkillUsed(name, tools, texts) : true;
+      return { name, tokens: estimateTokens(text), used };
+    })
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, MAX_SKILLS);
+  // skillTokens covers used skills only, matching the rows the UI shows.
+  return { skills, skillTokens: skills.reduce((sum, row) => sum + (row.used ? row.tokens : 0), 0) };
+}
+
+/**
+ * Provider-side content the timeline cannot see (system prompt, skill bodies,
+ * tool definitions, native overhead) approximated as reported window use minus
+ * visible estimate. Null without authoritative usage; clamped at zero when the
+ * estimate overshoots.
  */
 export function hiddenOverheadTokens(usedTokens: number | null, estimatedTokens: number): number | null {
   if (usedTokens === null) return null;
@@ -248,6 +307,13 @@ export const contextBreakdownRpc = defineRpc({
       outputTokens: z.number().int().nonnegative().safe(),
     })),
     overheadTokens: z.number().int().nonnegative().safe().nullable(),
+    skills: z.array(z.object({
+      name: z.string().min(1).max(200),
+      tokens: z.number().int().nonnegative().safe(),
+      used: z.boolean(),
+    })),
+    skillTokens: z.number().int().nonnegative().safe(),
+    skillsAvailable: z.boolean(),
     fetchedAt: z.string(),
   }),
 });

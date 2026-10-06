@@ -1,6 +1,6 @@
 import type { PaseoApi } from "@getpaseo/client";
-import { aggregateContext, contextTextOf, contextToolSplit, hiddenOverheadTokens } from "../shared/context";
-import type { ContextBreakdown, ContextItem } from "../shared/context";
+import { aggregateContext, aggregateSkills, contextTextOf, contextToolSplit, hiddenOverheadTokens } from "../shared/context";
+import type { ContextBreakdown, ContextItem, ContextSkillTotal } from "../shared/context";
 
 const PAGE_LIMIT = 200;
 // SHORTCUT: cap full-history scan at 5 pages (1000 items); raise or cursor-cache if long chats truncate often.
@@ -46,7 +46,26 @@ export function createContextReader(signal: AbortSignal) {
     const overheadTokens = usedTokens !== null && maxTokens !== null
       ? hiddenOverheadTokens(usedTokens, estimatedTokens)
       : null;
-    return { usedTokens, maxTokens, estimatedTokens, itemCount, truncated, parts, topTools, overheadTokens, fetchedAt: new Date().toISOString() };
+
+    // Skills actually loaded in the live session (names + descriptions only).
+    // Providers that cannot answer report it in `error` rather than rejecting.
+    let skills: ContextSkillTotal[] = [];
+    let skillTokens = 0;
+    let skillsAvailable = false;
+    try {
+      const listed = await ref.commands();
+      if (signal.aborted) throw new Error("Context breakdown cancelled.");
+      if (!listed?.error && Array.isArray(listed?.commands)) {
+        const entries = listed.commands.filter((entry) => entry?.kind === "skill");
+        const toolNames = items.filter((item) => item.type === "tool_call" && item.name).map((item) => item.name as string);
+        const userTexts = items.filter((item) => item.type === "user_message").map((item) => item.text);
+        ({ skills, skillTokens } = aggregateSkills(entries, { toolNames, userTexts }));
+        skillsAvailable = true;
+      }
+    } catch {
+      skillsAvailable = false;
+    }
+    return { usedTokens, maxTokens, estimatedTokens, itemCount, truncated, parts, topTools, overheadTokens, skills, skillTokens, skillsAvailable, fetchedAt: new Date().toISOString() };
   };
 }
 

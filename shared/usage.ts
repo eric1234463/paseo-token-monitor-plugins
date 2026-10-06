@@ -64,3 +64,17 @@ export function formatHkt(timestamp: string | null | undefined): string {
   const part = (type: string) => parts.find((value) => value.type === type)?.value;
   return `${part("day")} ${part("month")}, ${part("hour")}:${part("minute")} HKT`;
 }
+
+// SHORTCUT: fixed 5-min idle TTL; per-model/extended-cache TTLs if providers expose them.
+export const PROMPT_CACHE_TTL_MS = 5 * 60 * 1000;
+
+export function cacheRemainingMs(updatedAtMs: number | null | undefined, nowMs: number, ttlMs = PROMPT_CACHE_TTL_MS): number | null {
+  if (typeof updatedAtMs !== "number" || !Number.isFinite(updatedAtMs) || updatedAtMs <= 0) return null;
+  if (!Number.isFinite(nowMs) || !Number.isFinite(ttlMs) || ttlMs <= 0) return null;
+  return updatedAtMs + ttlMs - nowMs;
+}
+
+export function formatCountdown(remainingMs: number): string {
+  const clamped = Math.max(0, Math.floor(remainingMs / 1000));
+  return `${Math.floor(clamped / 60)}:${String(clamped % 60).padStart(2, "0")}`;
+}

@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, providerId, formatHkt } = require("../.test-build/shared/usage.js");
+const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
 const { parseClaudeUsage, fetchClaudeUsage } = require("../.test-build/server/claude.js");
 const { createCacheStore } = require("../.test-build/client/cache.js");
 
@@ -56,18 +56,30 @@ test("agent usage updates notify the pill and popover without retaining missing 
   let updates = 0;
   const release = store.subscribe(() => { updates++; });
   const agent = { provider: "codex", lastUsage: { inputTokens: 1000, cachedInputTokens: 800 } };
-  assert.equal(store.getSnapshot(), null);
-  store.update(agent);
-  assert.equal(store.getSnapshot(), 80);
+  assert.deepEqual(store.getSnapshot(), { ratio: null, updatedAtMs: null });
+  store.update(agent, 1_000);
+  assert.deepEqual(store.getSnapshot(), { ratio: 80, updatedAtMs: 1_000 });
   assert.equal(updates, 1);
-  store.update(agent);
+  store.update(agent, 1_000);
   assert.equal(updates, 1);
-  store.update({ provider: "codex" });
-  assert.equal(store.getSnapshot(), null);
+  store.update({ provider: "codex" }, 2_000);
+  assert.deepEqual(store.getSnapshot(), { ratio: null, updatedAtMs: null });
   assert.equal(updates, 2);
   release();
-  store.update(agent);
+  store.update(agent, 3_000);
   assert.equal(updates, 2);
+});
+
+test("prompt cache countdown follows a 5-minute idle TTL", () => {
+  assert.equal(PROMPT_CACHE_TTL_MS, 5 * 60 * 1000);
+  assert.equal(cacheRemainingMs(1_000, 1_000 + 60_000), PROMPT_CACHE_TTL_MS - 60_000);
+  assert.equal(cacheRemainingMs(1_000, 1_000 + PROMPT_CACHE_TTL_MS), 0);
+  assert.ok(cacheRemainingMs(1_000, 1_000 + PROMPT_CACHE_TTL_MS + 1_000) < 0);
+  assert.equal(cacheRemainingMs(null, Date.now()), null);
+  assert.equal(formatCountdown(5 * 60 * 1000), "5:00");
+  assert.equal(formatCountdown(61_000), "1:01");
+  assert.equal(formatCountdown(5_000), "0:05");
+  assert.equal(formatCountdown(-1_000), "0:00");
 });
 
 test("provider/model selections match exactly and reset times display in HKT", () => {

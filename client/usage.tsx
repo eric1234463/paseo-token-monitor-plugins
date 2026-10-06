@@ -1,10 +1,10 @@
 import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
 import type { PluginButtonContentProps, PluginButtonIconProps } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
-import { formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
+import { PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown, formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
 import type { UsageWindow } from "../shared/usage";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
@@ -48,8 +48,8 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
   const agentId = props.context === "agent" ? props.agentId : "";
   const { usage, isPending, isError } = useUsage(agentId, props.host.id);
   const speed = useSpeed(agentId, props.host.id);
-  const cache = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
-  const label = props.section === "tokens" ? tokenPillLabel(cache, speed.isError ? null : speed.data?.tokensPerSecond ?? null)
+  const cacheState = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
+  const label = props.section === "tokens" ? tokenPillLabel(cacheState.ratio, speed.isError ? null : speed.data?.tokensPerSecond ?? null)
     : isPending ? "Limits…" : isError ? "Limits stale" : pillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
   return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{props.section === "limits" ? "◷" : "↯"}</Text>;
@@ -80,11 +80,55 @@ function WindowRow({ label, window, theme }: { label: string; window: UsageWindo
   );
 }
 
+function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: PluginButtonContentProps["theme"] }) {
+  const state = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const remainingMs = cacheRemainingMs(state.updatedAtMs, nowMs);
+  if (state.ratio === null || remainingMs === null || state.updatedAtMs === null) {
+    return (
+      <View style={{ gap: 6 }}>
+        <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Cache expiry · Not available</Text>
+        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+          No cache reading yet. Send a message to establish prompt cache.
+        </Text>
+      </View>
+    );
+  }
+  const expired = remainingMs <= 0;
+  const pct = expired ? 0 : Math.max(0, Math.min(100, remainingMs / PROMPT_CACHE_TTL_MS * 100));
+  const color = expired ? theme.colors.statusDanger : remainingMs < 60_000 ? theme.colors.statusWarning : theme.colors.accent;
+  return (
+    <View style={{ gap: 6 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+        <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Cache expiry</Text>
+        <Text style={{ color, fontVariant: ["tabular-nums"] }}>
+          {expired ? "Expired" : `Expires in ${formatCountdown(remainingMs)}`}
+        </Text>
+      </View>
+      <View accessibilityRole="progressbar" accessibilityLabel="Prompt cache expiry"
+        accessibilityValue={expired ? { text: "Expired" } : { min: 0, max: 300, now: Math.ceil(remainingMs / 1000), text: `Expires in ${formatCountdown(remainingMs)}` }}
+        style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surface2, overflow: "hidden" }}>
+        {expired ? null : <View style={{ height: 6, width: `${pct}%`, backgroundColor: color }} />}
+      </View>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        {expired
+          ? `Idle over 5 min — next request starts fresh. Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())}.`
+          : `Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())} · 5-min idle TTL (heuristic).`}
+      </Text>
+    </View>
+  );
+}
+
 export function UsagePopover({ theme, layout, host, cacheStore, section, ...context }: PluginButtonContentProps & { section: UsageSection; cacheStore: CacheStore }) {
   const agentId = context.context === "agent" ? context.agentId : "";
   const { usage, provider, isPending, isFetching, isError, refetch, data } = useUsage(agentId, host.id);
   const speed = useSpeed(agentId, host.id);
-  const cache = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot);
+  const cacheState = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot);
+  const cache = cacheState.ratio;
   const { fiveHour, weekly } = quotaWindows(usage?.status === "available" ? usage : null);
   const extras = usage?.status === "available" ? usage.windows.filter((window) => window !== fiveHour && window !== weekly) : [];
   return (
@@ -110,6 +154,7 @@ export function UsagePopover({ theme, layout, host, cacheStore, section, ...cont
           Latest reported usage in this chat.{provider === "claude" ? " Cache reads / (fresh input + cache reads); excludes cache writes." : provider === "codex" ? " Cached input / total input tokens." : " Cache token semantics are not provided for this provider."}
         </Text>
       </View>
+      <CacheExpiry cacheStore={cacheStore} theme={theme} />
       <View style={{ gap: 6 }}>
         <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>{speedLabel(speed.isError ? null : speed.data?.tokensPerSecond ?? null)}</Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>

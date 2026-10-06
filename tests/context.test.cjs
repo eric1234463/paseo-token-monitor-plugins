@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { estimateTokens, contextPartOf, contextTextOf, contextToolSplit, aggregateContext, contextPillLabel, hiddenOverheadTokens, isMcpToolCall } = require("../.test-build/shared/context.js");
+const { estimateTokens, contextPartOf, contextTextOf, contextToolSplit, aggregateContext, aggregateSkills, contextPillLabel, hiddenOverheadTokens, isMcpToolCall, isSkillUsed } = require("../.test-build/shared/context.js");
 
 test("estimateTokens uses ~4 chars per token with a minimum of one", () => {
   assert.equal(estimateTokens(""), 1);
@@ -102,6 +102,44 @@ test("tool parts and top tools carry input/output shares", () => {
   assert.equal(byPart.user.inputTokens, null);
   assert.equal(topTools[0].name, "mcp__s__t");
   assert.equal(topTools[0].outputTokens, 200);
+});
+
+test("aggregateSkills estimates loaded skills and skips unnamed entries", () => {
+  const { skills, skillTokens } = aggregateSkills([
+    { name: "commit", description: "Create commits", argumentHint: "" },
+    { name: "", description: "no name" },
+    { description: "missing name" },
+  ]);
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].name, "commit");
+  assert.ok(skills[0].tokens >= 1);
+  assert.equal(skillTokens, skills[0].tokens);
+  const empty = aggregateSkills([]);
+  assert.equal(empty.skills.length, 0);
+  assert.equal(empty.skillTokens, 0);
+});
+
+test("isSkillUsed matches tool calls and /mentions", () => {
+  assert.equal(isSkillUsed("commit", ["commit"], []), true);
+  assert.equal(isSkillUsed("Commit", ["COMMIT"], []), true);
+  assert.equal(isSkillUsed("commit", ["other"], ["please run /commit now"]), true);
+  assert.equal(isSkillUsed("commit", ["shell"], ["hello"]), false);
+  assert.equal(isSkillUsed("", ["commit"], []), false);
+});
+
+test("aggregateSkills flags used skills and totals used tokens only", () => {
+  const entries = [
+    { name: "commit", description: "Create commits" },
+    { name: "review", description: "Review code" },
+  ];
+  const { skills, skillTokens } = aggregateSkills(entries, { toolNames: ["commit"], userTexts: ["hi"] });
+  const byName = Object.fromEntries(skills.map((row) => [row.name, row]));
+  assert.equal(byName.commit.used, true);
+  assert.equal(byName.review.used, false);
+  assert.equal(skillTokens, byName.commit.tokens);
+  const all = aggregateSkills(entries);
+  assert.ok(all.skills.every((row) => row.used));
+  assert.equal(all.skillTokens, all.skills.reduce((sum, row) => sum + row.tokens, 0));
 });
 
 test("contextPillLabel prefers authoritative percent, then estimate", () => {
