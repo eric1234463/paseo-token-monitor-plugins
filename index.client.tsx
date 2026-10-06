@@ -1,6 +1,6 @@
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginButtonRegistration, PluginClientContext } from "@getpaseo/plugin/client";
 import type { PaseoAgent, OwnedSubscription, PaseoAgentListResult } from "@getpaseo/client";
-import { UsageIcon, UsagePopover } from "./client/usage";
+import { CacheIcon, CachePopover, UsageIcon, UsagePopover } from "./client/usage";
 import { ContextIcon, ContextPopover } from "./client/context";
 import { providerId } from "./shared/usage";
 import { createCacheStore } from "./client/cache";
@@ -29,16 +29,18 @@ export default function contribute(client: PluginClientContext) {
     const cacheStore = createCacheStore();
     cacheStore.update(agent);
     const workspaceId = agent.workspaceId;
-    const registrations = (["limits", "tokens", "context"] as const).map((section) => {
+    const registrations = (["limits", "tokens", "cache", "context"] as const).map((section) => {
       let registration: PluginButtonRegistration;
       const onLabel = (label: string) => registration?.update({ label });
-      const titles = { limits: "Provider usage limits", tokens: "Cache ratio and average tokens per second", context: "Context window breakdown" };
-      const labels = { limits: "Limits…", tokens: "Tokens…", context: "Context…" };
+      const titles = { limits: "Provider usage limits", tokens: "Cache ratio and average tokens per second", cache: "Prompt cache expiry", context: "Context window breakdown" };
+      const labels = { limits: "Limits…", tokens: "Tokens…", cache: "Cache…", context: "Context…" };
       const Icon = section === "context"
         ? (props: PluginButtonIconProps) => <ContextIcon {...props} onLabel={onLabel} />
+        : section === "cache" ? (props: PluginButtonIconProps) => <CacheIcon {...props} cacheStore={cacheStore} onLabel={onLabel} />
         : (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} cacheStore={cacheStore} onLabel={onLabel} />;
       const Content = section === "context"
         ? (props: PluginButtonContentProps) => <ContextPopover {...props} />
+        : section === "cache" ? (props: PluginButtonContentProps) => <CachePopover {...props} cacheStore={cacheStore} />
         : (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} cacheStore={cacheStore} />;
       registration = client.addComposerPill({
         id: `usage-${section}`, workspaceId, agentId: agent.id,

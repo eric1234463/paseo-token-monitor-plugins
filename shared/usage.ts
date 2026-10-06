@@ -55,6 +55,10 @@ export function tokenPillLabel(cache: number | null, speed: number | null): stri
   return `C${cache === null ? "—" : `${Math.round(cache)}%`} ${rate}tok/s`;
 }
 
+export function cachePillLabel(remainingMs: number | null): string {
+  return `Cache ${remainingMs === null ? "—" : remainingMs <= 0 ? "Expired" : formatCountdown(remainingMs)}`;
+}
+
 export function formatHkt(timestamp: string | null | undefined): string {
   if (!timestamp || !Number.isFinite(Date.parse(timestamp))) return "Not provided";
   const parts = new Intl.DateTimeFormat("en-US", {

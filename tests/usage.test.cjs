@@ -1,6 +1,6 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
+const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, cachePillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
 const { parseClaudeUsage, fetchClaudeUsage } = require("../.test-build/server/claude.js");
 const { createCacheStore } = require("../.test-build/client/cache.js");
 
@@ -30,6 +30,17 @@ test("separate labels preserve unknown and zero metrics within the host's compac
   assert.equal(tokenPillLabel(80, 27.56), "C80% 27.6tok/s");
   for (const cache of [null, 0, 100]) for (const speed of [null, 0, 9.99, 99.99, 999, 12345]) {
     assert.ok(tokenPillLabel(cache, speed).length <= 14);
+  }
+});
+
+test("separate cache pill keeps countdown, expired and unknown labels compact", () => {
+  assert.equal(cachePillLabel(272_000), "Cache 4:32");
+  assert.equal(cachePillLabel(5_000), "Cache 0:05");
+  assert.equal(cachePillLabel(0), "Cache Expired");
+  assert.equal(cachePillLabel(-1_000), "Cache Expired");
+  assert.equal(cachePillLabel(null), "Cache —");
+  for (const remainingMs of [null, 300_000, 5_000, 0, -1_000]) {
+    assert.ok(cachePillLabel(remainingMs).length <= 14);
   }
 });
 

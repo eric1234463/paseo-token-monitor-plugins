@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
-import { PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown, formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
+import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
 import type { UsageWindow } from "../shared/usage";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
@@ -53,6 +53,22 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
     : isPending ? "Limits…" : isError ? "Limits stale" : pillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
   return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{props.section === "limits" ? "◷" : "↯"}</Text>;
+}
+
+export function CacheIcon(props: PluginButtonIconProps & { cacheStore: CacheStore; onLabel(label: string): void }) {
+  const cacheState = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const remainingMs = cacheState.ratio === null ? null : cacheRemainingMs(cacheState.updatedAtMs, nowMs);
+  const ticking = remainingMs !== null && remainingMs > 0;
+  useEffect(() => {
+    if (!ticking) return;
+    setNowMs(Date.now());
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [ticking, cacheState.updatedAtMs]);
+  const label = cachePillLabel(remainingMs);
+  useEffect(() => props.onLabel(label), [label, props.onLabel]);
+  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel="Prompt cache expiry">◷</Text>;
 }
 
 function WindowRow({ label, window, theme }: { label: string; window: UsageWindow | null; theme: PluginButtonContentProps["theme"] }) {
@@ -121,6 +137,12 @@ function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: Plu
       </Text>
     </View>
   );
+}
+
+export function CachePopover({ theme, layout, cacheStore }: PluginButtonContentProps & { cacheStore: CacheStore }) {
+  return <View style={{ width: layout.compact ? "100%" : 320 }}>
+    <CacheExpiry cacheStore={cacheStore} theme={theme} />
+  </View>;
 }
 
 export function UsagePopover({ theme, layout, host, cacheStore, section, ...context }: PluginButtonContentProps & { section: UsageSection; cacheStore: CacheStore }) {

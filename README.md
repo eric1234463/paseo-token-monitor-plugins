@@ -1,12 +1,15 @@
 # Paseo Token Monitor
 
-Shows two chat composer pills for Codex, Claude, and Grok.
+Shows chat composer pills for Codex, Claude, and Grok.
 The limits pill displays the remaining five-hour and weekly allowance
 (`5h N% · W N%`). Click it for
 usage bars, additional provider windows, and reset times in HKT (UTC+8).
 Missing windows display `Not provided`; they never imply zero usage or unlimited access.
 
 The tokens pill shows cache ratio and average throughput (`C80% 27.6tok/s`).
+A separate cache expiry pill shows `Cache 4:32`, updates every second, and shows
+`Cache Expired` when the idle TTL elapses or `Cache —` without a cache reading.
+Click it for cache expiry details.
 `C` means cache ratio, from this chat's latest reported token usage,
 updated through Paseo's agent subscription. This is separate from account limits
 and is not a cumulative chat average. Codex uses cached input / total input tokens
