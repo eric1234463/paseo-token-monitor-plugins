@@ -59,14 +59,20 @@ export function cachePillLabel(remainingMs: number | null): string {
   return `Cache ${remainingMs === null ? "—" : remainingMs <= 0 ? "Expired" : formatCountdown(remainingMs)}`;
 }
 
+const HKT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export function formatHkt(timestamp: string | null | undefined): string {
-  if (!timestamp || !Number.isFinite(Date.parse(timestamp))) return "Not provided";
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Hong_Kong", day: "2-digit", month: "short",
-    hour: "2-digit", minute: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date(timestamp));
-  const part = (type: string) => parts.find((value) => value.type === type)?.value;
-  return `${part("day")} ${part("month")}, ${part("hour")}:${part("minute")} HKT`;
+  if (!timestamp) return "Not provided";
+  const ms = Date.parse(timestamp);
+  if (!Number.isFinite(ms)) return "Not provided";
+  // HKT is UTC+8 with no DST. Shift to UTC and read UTC parts so the result
+  // never depends on host Intl behavior (some engines omit hour/minute parts).
+  const hkt = new Date(ms + 8 * 3600 * 1000);
+  const day = String(hkt.getUTCDate()).padStart(2, "0");
+  const month = HKT_MONTHS[hkt.getUTCMonth()];
+  const hour = String(hkt.getUTCHours()).padStart(2, "0");
+  const minute = String(hkt.getUTCMinutes()).padStart(2, "0");
+  return `${day} ${month}, ${hour}:${minute} HKT`;
 }
 
 // SHORTCUT: fixed 5-min idle TTL; per-model/extended-cache TTLs if providers expose them.
