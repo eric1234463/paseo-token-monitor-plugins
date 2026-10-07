@@ -26,6 +26,37 @@ export function remaining(window: UsageWindow | null): number | null {
   return value === null ? null : Math.max(0, Math.min(100, value));
 }
 
+export function used(window: UsageWindow | null): number | null {
+  const left = remaining(window);
+  return left === null ? null : 100 - left;
+}
+
+// SHORTCUT: fixed 90%/95% gateway; per-provider thresholds if usage patterns diverge.
+export const GATEWAY_FIVE_HOUR_USED_PCT = 90;
+export const GATEWAY_WEEKLY_USED_PCT = 95;
+// Back-compat alias for the 5-hour threshold.
+export const GATEWAY_USED_PCT = GATEWAY_FIVE_HOUR_USED_PCT;
+
+export function gatewayReasons(usage: Usage | null | undefined): string[] {
+  if (!usage || usage.status !== "available") return [];
+  const { fiveHour, weekly } = quotaWindows(usage);
+  const reasons: string[] = [];
+  const fiveHourUsed = used(fiveHour);
+  if (fiveHourUsed !== null && fiveHourUsed >= GATEWAY_FIVE_HOUR_USED_PCT) reasons.push("5-hour");
+  const weeklyUsed = used(weekly);
+  if (weeklyUsed !== null && weeklyUsed >= GATEWAY_WEEKLY_USED_PCT) reasons.push("Weekly");
+  return reasons;
+}
+
+export function isGatewayTripped(usage: Usage | null | undefined): boolean {
+  return gatewayReasons(usage).length > 0;
+}
+
+export function gatewayPillLabel(usage: Usage | null | undefined): string {
+  const base = pillLabel(usage);
+  return isGatewayTripped(usage) ? `\u26A0 ${base}` : base;
+}
+
 export function cacheRatio(provider: SupportedProvider | null, usage: PaseoAgent["lastUsage"]): number | null {
   if (provider !== "codex" && provider !== "claude") return null;
   const input = usage?.inputTokens;

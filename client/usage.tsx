@@ -4,8 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
-import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, pillLabel, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
-import type { UsageWindow } from "../shared/usage";
+import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, gatewayPillLabel, gatewayReasons, isGatewayTripped, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
+import type { Usage, UsageWindow } from "../shared/usage";
+import { HANDOFF_FILENAME, buildHandoffPrompt, handoffTriggerSummary } from "../shared/handoff";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
 
@@ -49,10 +50,12 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
   const { usage, isPending, isError } = useUsage(agentId, props.host.id);
   const speed = useSpeed(agentId, props.host.id);
   const cacheState = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
+  const tripped = props.section === "limits" && !isPending && !isError && isGatewayTripped(usage?.status === "available" ? usage : null);
   const label = props.section === "tokens" ? tokenPillLabel(cacheState.ratio, speed.isError ? null : speed.data?.tokensPerSecond ?? null)
-    : isPending ? "Limits…" : isError ? "Limits stale" : pillLabel(usage);
+    : isPending ? "Limits…" : isError ? "Limits stale" : gatewayPillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
-  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{props.section === "limits" ? "◷" : "↯"}</Text>;
+  const glyph = props.section === "limits" ? (tripped ? "\u26A0" : "◷") : "↯";
+  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{glyph}</Text>;
 }
 
 export function CacheIcon(props: PluginButtonIconProps & { cacheStore: CacheStore; onLabel(label: string): void }) {
@@ -139,6 +142,40 @@ function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: Plu
   );
 }
 
+function GatewayWarning({ usage, agentId, theme }: { usage: Usage | null; agentId: string; theme: PluginButtonContentProps["theme"] }) {
+  const paseo = usePaseo();
+  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const reasons = gatewayReasons(usage);
+  if (reasons.length === 0) return null;
+  const headline = [
+    reasons.includes("5-hour") ? "5-hour \u226590%" : null,
+    reasons.includes("Weekly") ? "weekly \u226595%" : null,
+  ].filter(Boolean).join(" · ");
+  const canSend = Boolean(agentId) && state !== "sending" && state !== "sent";
+  return (
+    <View style={{ gap: 8, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.statusDanger, backgroundColor: theme.colors.surface2 }}>
+      <Text style={{ color: theme.colors.statusDanger, fontWeight: "700" }}>STOP \u2014 {headline} used</Text>
+      <Text style={{ color: theme.colors.foreground, fontSize: 12 }}>{handoffTriggerSummary(usage)}</Text>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        Paseo plugins can\u2019t block sends \u2014 treat this as a stop line: generate the handoff before continuing.
+      </Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Generate handoff doc" disabled={!canSend}
+        onPress={() => {
+          if (!agentId || state === "sending" || state === "sent") return;
+          setState("sending");
+          void paseo.agents.ref(agentId).send(buildHandoffPrompt(usage)).then(() => setState("sent")).catch(() => setState("error"));
+        }} style={{ padding: 8, borderRadius: 6, backgroundColor: theme.colors.accent, opacity: canSend ? 1 : 0.6 }}>
+        <Text style={{ color: theme.colors.accentForeground, fontWeight: "600", textAlign: "center" }}>
+          {state === "sending" ? "Sending\u2026" : state === "sent" ? "Handoff prompt sent" : state === "error" ? "Send failed \u2014 retry" : "Generate handoff doc"}
+        </Text>
+      </Pressable>
+      {state === "sent" ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        The agent will save {HANDOFF_FILENAME} in the workspace root and reply in chat. Copy it to the next session.
+      </Text> : null}
+    </View>
+  );
+}
+
 export function CachePopover({ theme, layout, cacheStore }: PluginButtonContentProps & { cacheStore: CacheStore }) {
   return <View style={{ width: layout.compact ? "100%" : 320 }}>
     <CacheExpiry cacheStore={cacheStore} theme={theme} />
@@ -160,6 +197,7 @@ export function UsagePopover({ theme, layout, host, cacheStore, section, ...cont
         {section === "limits" ? "Account usage across chats" : "This chat"} · {host.label}{section === "limits" && usage?.planLabel ? ` · ${usage.planLabel}` : ""}
       </Text>
       {section === "limits" ? <>
+      <GatewayWarning usage={usage?.status === "available" ? usage : null} agentId={agentId} theme={theme} />
       {isPending ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading usage…</Text> : null}
       {isError ? <Text style={{ color: theme.colors.statusWarning }}>Could not refresh usage. Any values shown are the last known reading.</Text> : null}
       {!isPending && usage?.status !== "available" ? <Text style={{ color: theme.colors.foregroundMuted }}>

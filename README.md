@@ -6,6 +6,20 @@ The limits pill displays the remaining five-hour and weekly allowance
 usage bars, additional provider windows, and reset times in HKT (UTC+8).
 Missing windows display `Not provided`; they never imply zero usage or unlimited access.
 
+## Usage gateway and handoff
+
+The limits pill is a soft stop-line, not a send blocker (Paseo plugins cannot
+intercept sends or stop a running turn). It trips when the 5-hour window reaches
+90% used or the weekly window reaches 95% used: the pill gains a `⚠` prefix
+and the limits popover shows a STOP warning with the triggering window,
+remaining allowance, and reset time in HKT.
+
+The warning carries a **Generate handoff doc** button. It sends one prompt to the
+current agent asking it to save `HANDOFF.md` in the workspace root (goal, current
+state, done, remaining steps, key files, blockers, how to resume, verification)
+and to reply with the full doc in chat, ready to paste into the next session.
+Note the prompt itself costs one turn, so generate early when the line is near.
+
 The tokens pill shows cache ratio and average throughput (`C80% 27.6tok/s`).
 A separate cache expiry pill shows `Cache 4:32`, updates every second, and shows
 `Cache Expired` when the idle TTL elapses or `Cache —` without a cache reading.

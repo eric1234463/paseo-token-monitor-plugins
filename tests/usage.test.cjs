@@ -1,6 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { cacheRatio, quotaWindows, remaining, pillLabel, tokenPillLabel, cachePillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
+const { cacheRatio, quotaWindows, remaining, used, pillLabel, gatewayReasons, isGatewayTripped, gatewayPillLabel, GATEWAY_FIVE_HOUR_USED_PCT, GATEWAY_WEEKLY_USED_PCT, tokenPillLabel, cachePillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
+const { HANDOFF_FILENAME, buildHandoffPrompt, handoffTriggerSummary } = require("../.test-build/shared/handoff.js");
 const { parseClaudeUsage, fetchClaudeUsage } = require("../.test-build/server/claude.js");
 const { createCacheStore } = require("../.test-build/client/cache.js");
 
@@ -125,4 +126,45 @@ test("Claude auth failure produces an unavailable reading and never returns cred
   assert.equal(result.status, "unavailable");
   assert.equal(result.windows.length, 0);
   assert.equal(JSON.stringify(result).includes("test-secret"), false);
+});
+
+test("gateway trips at 90% on 5-hour but 95% on weekly", () => {
+  assert.equal(GATEWAY_FIVE_HOUR_USED_PCT, 90);
+  assert.equal(GATEWAY_WEEKLY_USED_PCT, 95);
+  const at = (fiveHourUsed, weeklyUsed) => ({
+    status: "available",
+    windows: [
+      { id: "session", usedPct: fiveHourUsed },
+      { id: "weekly", usedPct: weeklyUsed },
+    ],
+  });
+  assert.deepEqual(gatewayReasons(at(90, 0)), ["5-hour"]);
+  assert.deepEqual(gatewayReasons(at(89, 0)), []);
+  assert.deepEqual(gatewayReasons(at(0, 95)), ["Weekly"]);
+  assert.deepEqual(gatewayReasons(at(0, 94)), []);
+  assert.deepEqual(gatewayReasons(at(90, 95)), ["5-hour", "Weekly"]);
+  assert.equal(isGatewayTripped(at(90, 0)), true);
+  assert.equal(isGatewayTripped(at(0, 94)), false);
+  assert.equal(isGatewayTripped({ status: "unavailable", windows: [] }), false);
+  assert.equal(isGatewayTripped(null), false);
+  assert.ok(gatewayPillLabel(at(90, 0)).startsWith("\u26A0 "));
+  assert.equal(gatewayPillLabel(at(0, 0)), pillLabel(at(0, 0)));
+  assert.equal(used(quotaWindows(at(90, 0)).fiveHour), 90);
+});
+
+test("handoff prompt instructs a workspace file save with trigger context", () => {
+  assert.equal(HANDOFF_FILENAME, "HANDOFF.md");
+  const usage = {
+    status: "available",
+    windows: [
+      { id: "session", usedPct: 92, resetsAt: "2026-10-07T08:00:00Z" },
+      { id: "weekly", usedPct: 10 },
+    ],
+  };
+  const prompt = buildHandoffPrompt(usage);
+  assert.ok(prompt.includes(HANDOFF_FILENAME));
+  assert.ok(prompt.includes("STOP"));
+  assert.ok(prompt.includes("How to resume"));
+  assert.ok(handoffTriggerSummary(usage).includes("5-hour"));
+  assert.equal(handoffTriggerSummary(null), "Usage is below the gateway threshold.");
 });
