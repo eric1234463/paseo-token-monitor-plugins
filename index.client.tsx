@@ -34,7 +34,7 @@ export default function contribute(client: PluginClientContext) {
   };
   const register = (agent: PaseoAgent) => {
     if (lifetime.signal.aborted) return;
-    if (!agent.workspaceId || agent.archivedAt) return remove(agent.id);
+    if (!agent.workspaceId || !providerId(agent.provider) || agent.archivedAt) return remove(agent.id);
     const existing = pills.get(agent.id);
     if (existing?.workspaceId === agent.workspaceId && existing.provider === agent.provider) {
       existing.cacheStore.update(agent);
@@ -44,16 +44,7 @@ export default function contribute(client: PluginClientContext) {
     const cacheStore = createCacheStore();
     cacheStore.update(agent);
     const workspaceId = agent.workspaceId;
-    const resumePill = client.addComposerPill({
-      id: "resume-previous-agent", workspaceId, agentId: agent.id,
-      button: {
-        title: "Resume a previous agent", label: "Resume…", icon: ResumeIcon,
-        behavior: { kind: "popover", Content: ResumePopover },
-      },
-    });
-    // Resume is provider-independent; the usage pills need supported token semantics.
-    const sections = providerId(agent.provider) ? (["limits", "tokens", "cache", "context"] as const) : ([] as const);
-    const registrations = [resumePill, ...sections.map((section) => {
+    const registrations = (["limits", "tokens", "cache", "context"] as const).map((section) => {
       let registration: PluginButtonRegistration;
       const onLabel = (label: string) => registration?.update({ label });
       const titles = { limits: "Provider usage limits", tokens: "Cache ratio and average tokens per second", cache: "Prompt cache expiry", context: "Context window breakdown" };
@@ -71,7 +62,7 @@ export default function contribute(client: PluginClientContext) {
         button: { title: titles[section], label: labels[section], icon: Icon, behavior: { kind: "popover", Content } },
       });
       return registration;
-    })];
+    });
     pills.set(agent.id, { workspaceId: agent.workspaceId, provider: agent.provider, cacheStore, registrations });
   };
   void client.paseo.agents.list({ scope: "active", subscribe: {}, signal: lifetime.signal }).then((directory) => {
