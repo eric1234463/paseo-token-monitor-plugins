@@ -54,8 +54,12 @@ export function isGatewayTripped(usage: Usage | null | undefined): boolean {
 
 export function gatewayPillLabel(usage: Usage | null | undefined): string {
   const base = pillLabel(usage);
-  return isGatewayTripped(usage) ? `\u26A0 ${base}` : base;
+  return isGatewayTripped(usage) ? `STOP ${base}` : base;
 }
+
+// Hardcoded red for the gateway icon: pill icons don't receive the host theme,
+// so this keeps the STOP state visible in light and dark themes alike.
+export const GATEWAY_ALERT_COLOR = "#ef4444";
 
 export function cacheRatio(provider: SupportedProvider | null, usage: PaseoAgent["lastUsage"]): number | null {
   if (provider !== "codex" && provider !== "claude") return null;

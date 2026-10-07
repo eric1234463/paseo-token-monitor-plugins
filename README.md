@@ -10,8 +10,8 @@ Missing windows display `Not provided`; they never imply zero usage or unlimited
 
 The limits pill is a soft stop-line, not a send blocker (Paseo plugins cannot
 intercept sends or stop a running turn). It trips when the 5-hour window reaches
-90% used or the weekly window reaches 95% used: the pill gains a `⚠` prefix
-and the limits popover shows a STOP warning with the triggering window,
+90% used or the weekly window reaches 95% used: the pill label switches to `STOP …`
+with a red alert icon, and the limits popover shows a STOP warning with the triggering window,
 remaining allowance, and reset time in HKT.
 
 The warning carries a **Generate handoff doc** button. It sends one prompt to the

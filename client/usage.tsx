@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
-import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, gatewayPillLabel, gatewayReasons, isGatewayTripped, providerId, quotaWindows, remaining, tokenPillLabel } from "../shared/usage";
+import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, gatewayPillLabel, gatewayReasons, isGatewayTripped, providerId, quotaWindows, remaining, tokenPillLabel, GATEWAY_ALERT_COLOR } from "../shared/usage";
 import type { Usage, UsageWindow } from "../shared/usage";
 import { HANDOFF_FILENAME, buildHandoffPrompt, handoffTriggerSummary } from "../shared/handoff";
 import type { CacheStore } from "./cache";
@@ -97,6 +97,15 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
     : isPending ? "Limits…" : isError ? "Limits stale" : gatewayPillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
   const glyph = props.section === "limits" ? (tripped ? "\u26A0" : "◷") : "↯";
+  // The host owns the pill background (no tone/style field on PluginButton),
+  // so the strongest red signal available is a red badge in the icon slot.
+  if (tripped) {
+    return (
+      <View style={{ backgroundColor: GATEWAY_ALERT_COLOR, borderRadius: 4, paddingHorizontal: 4, paddingVertical: 1 }}>
+        <Text style={{ color: "#ffffff", fontSize: props.size, fontWeight: "700" }} accessibilityLabel="Account limits">{"\u26A0"}</Text>
+      </View>
+    );
+  }
   return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{glyph}</Text>;
 }
 

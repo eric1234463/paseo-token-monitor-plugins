@@ -147,7 +147,7 @@ test("gateway trips at 90% on 5-hour but 95% on weekly", () => {
   assert.equal(isGatewayTripped(at(0, 94)), false);
   assert.equal(isGatewayTripped({ status: "unavailable", windows: [] }), false);
   assert.equal(isGatewayTripped(null), false);
-  assert.ok(gatewayPillLabel(at(90, 0)).startsWith("\u26A0 "));
+  assert.ok(gatewayPillLabel(at(90, 0)).startsWith("STOP "));
   assert.equal(gatewayPillLabel(at(0, 0)), pillLabel(at(0, 0)));
   assert.equal(used(quotaWindows(at(90, 0)).fiveHour), 90);
 });
