@@ -1,4 +1,5 @@
 import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
+import { copyText } from "@getpaseo/plugin/client/react-native";
 import type { PluginButtonContentProps, PluginButtonIconProps, PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -6,7 +7,7 @@ import { Pressable, Text, View } from "react-native";
 import { claudeUsageRpc } from "../shared/claude";
 import { PROMPT_CACHE_TTL_MS, cachePillLabel, cacheRemainingMs, formatCountdown, formatHkt, gatewayPillLabel, gatewayReasons, isGatewayTripped, providerId, quotaWindows, remaining, tokenPillLabel, GATEWAY_ALERT_COLOR } from "../shared/usage";
 import type { Usage, UsageWindow } from "../shared/usage";
-import { HANDOFF_FILENAME, buildHandoffPrompt, handoffTriggerSummary } from "../shared/handoff";
+import { buildResumePrompt, handoffTriggerSummary } from "../shared/handoff";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
 
@@ -194,35 +195,32 @@ function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: Plu
 }
 
 function GatewayWarning({ usage, agentId, theme }: { usage: Usage | null; agentId: string; theme: PluginButtonContentProps["theme"] }) {
-  const paseo = usePaseo();
-  const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "error">("idle");
   const reasons = gatewayReasons(usage);
   if (reasons.length === 0) return null;
   const headline = [
     reasons.includes("5-hour") ? "5-hour \u226590%" : null,
     reasons.includes("Weekly") ? "weekly \u226595%" : null,
   ].filter(Boolean).join(" · ");
-  const canSend = Boolean(agentId) && state !== "sending" && state !== "sent";
+  const prompt = agentId ? buildResumePrompt(agentId) : null;
+  const canCopy = prompt !== null && copyState !== "copied";
   return (
     <View style={{ gap: 8, padding: 10, borderRadius: 8, borderWidth: 1, borderColor: theme.colors.statusDanger, backgroundColor: theme.colors.surface2 }}>
       <Text style={{ color: theme.colors.statusDanger, fontWeight: "700" }}>STOP \u2014 {headline} used</Text>
       <Text style={{ color: theme.colors.foreground, fontSize: 12 }}>{handoffTriggerSummary(usage)}</Text>
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-        Paseo plugins can\u2019t block sends \u2014 treat this as a stop line: generate the handoff before continuing.
+        Paseo plugins can\u2019t block sends \u2014 stop starting new work here. Open a new agent and give it the resume prompt below so it picks up from this agent\u2019s timeline.
       </Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Generate handoff doc" disabled={!canSend}
+      {prompt ? <Text selectable style={{ color: theme.colors.foreground, fontSize: 12 }}>{prompt}</Text> : null}
+      {prompt ? <Pressable accessibilityRole="button" accessibilityLabel="Copy resume prompt" disabled={!canCopy}
         onPress={() => {
-          if (!agentId || state === "sending" || state === "sent") return;
-          setState("sending");
-          void paseo.agents.ref(agentId).send(buildHandoffPrompt(usage)).then(() => setState("sent")).catch(() => setState("error"));
-        }} style={{ padding: 8, borderRadius: 6, backgroundColor: theme.colors.accent, opacity: canSend ? 1 : 0.6 }}>
+          if (!prompt || copyState === "copied") return;
+          void copyText(prompt).then(() => setCopyState("copied")).catch(() => setCopyState("error"));
+        }} style={{ padding: 8, borderRadius: 6, backgroundColor: theme.colors.accent, opacity: canCopy ? 1 : 0.6 }}>
         <Text style={{ color: theme.colors.accentForeground, fontWeight: "600", textAlign: "center" }}>
-          {state === "sending" ? "Sending\u2026" : state === "sent" ? "Handoff prompt sent" : state === "error" ? "Send failed \u2014 retry" : "Generate handoff doc"}
+          {copyState === "copied" ? "Copied \u2014 paste it into the new agent" : copyState === "error" ? "Copy failed \u2014 retry" : "Copy resume prompt"}
         </Text>
-      </Pressable>
-      {state === "sent" ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-        The agent will save {HANDOFF_FILENAME} in the workspace root and reply in chat. Copy it to the next session.
-      </Text> : null}
+      </Pressable> : null}
     </View>
   );
 }

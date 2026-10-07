@@ -1,7 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { cacheRatio, quotaWindows, remaining, used, pillLabel, gatewayReasons, isGatewayTripped, gatewayPillLabel, GATEWAY_FIVE_HOUR_USED_PCT, GATEWAY_WEEKLY_USED_PCT, tokenPillLabel, cachePillLabel, providerId, formatHkt, PROMPT_CACHE_TTL_MS, cacheRemainingMs, formatCountdown } = require("../.test-build/shared/usage.js");
-const { HANDOFF_FILENAME, buildHandoffPrompt, handoffTriggerSummary } = require("../.test-build/shared/handoff.js");
+const { buildResumePrompt, handoffTriggerSummary } = require("../.test-build/shared/handoff.js");
 const { parseClaudeUsage, fetchClaudeUsage } = require("../.test-build/server/claude.js");
 const { createCacheStore } = require("../.test-build/client/cache.js");
 
@@ -152,8 +152,7 @@ test("gateway trips at 90% on 5-hour but 95% on weekly", () => {
   assert.equal(used(quotaWindows(at(90, 0)).fiveHour), 90);
 });
 
-test("handoff prompt instructs a workspace file save with trigger context", () => {
-  assert.equal(HANDOFF_FILENAME, "HANDOFF.md");
+test("resume prompt pulls the previous timeline by agent id", () => {
   const usage = {
     status: "available",
     windows: [
@@ -161,10 +160,11 @@ test("handoff prompt instructs a workspace file save with trigger context", () =
       { id: "weekly", usedPct: 10 },
     ],
   };
-  const prompt = buildHandoffPrompt(usage);
-  assert.ok(prompt.includes(HANDOFF_FILENAME));
-  assert.ok(prompt.includes("STOP"));
-  assert.ok(prompt.includes("How to resume"));
+  const prompt = buildResumePrompt("agent-123");
+  assert.ok(prompt.includes("paseo logs agent-123"));
+  assert.ok(prompt.includes("original goal"));
+  assert.ok(prompt.includes("uncommitted changes"));
+  assert.ok(prompt.includes("Verify the actual file state"));
   assert.ok(handoffTriggerSummary(usage).includes("5-hour"));
   assert.equal(handoffTriggerSummary(null), "Usage is below the gateway threshold.");
 });

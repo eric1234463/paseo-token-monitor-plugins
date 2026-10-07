@@ -14,11 +14,24 @@ intercept sends or stop a running turn). It trips when the 5-hour window reaches
 with a red alert icon, and the limits popover shows a STOP warning with the triggering window,
 remaining allowance, and reset time in HKT.
 
-The warning carries a **Generate handoff doc** button. It sends one prompt to the
-current agent asking it to save `HANDOFF.md` in the workspace root (goal, current
-state, done, remaining steps, key files, blockers, how to resume, verification)
-and to reply with the full doc in chat, ready to paste into the next session.
-Note the prompt itself costs one turn, so generate early when the line is near.
+The popover also has a **Copy resume prompt** button. It copies a pull-based resume
+prompt for the current agent: open a new agent, paste it, and the new agent reads
+this agent's timeline with `paseo logs <agent-id>`, identifies the goal, completed
+work, decisions, and remaining tasks, inspects the repository, worktree, branch,
+and uncommitted changes, then continues the unfinished work. Nothing needs to be
+generated before this agent stops, and the prompt itself costs no turn here.
+
+To start that handoff in reverse, the plugin also registers a **workspace header
+button** (`↺ Resume…`) rather than a composer pill. Composer pills carry an
+`agentId`, so they do not exist until an agent does — which is exactly the moment
+you want the resume prompt. A workspace-scoped header button needs only a
+`workspaceId`, so it is reachable while composing a new agent inside a workspace.
+Type the previous agent's id there and **Confirm** — it creates a new agent in the
+workspace with the resume prompt. Provider and model follow the previous agent with
+nothing to choose, or tap a provider row to switch (its default model applies) and
+then a model row to pick a specific model. Alternatively copy the prompt and paste
+it into a composer yourself. The new agent
+verifies actual file state and test results before relying on claims in the timeline.
 
 The tokens pill shows cache ratio and average throughput (`C80% 27.6tok/s`).
 A separate cache expiry pill shows `Cache 4:32`, updates every second, and shows

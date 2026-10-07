@@ -1,8 +1,6 @@
 import { formatHkt, gatewayReasons, quotaWindows, remaining, used } from "./usage";
 import type { Usage } from "./usage";
 
-export const HANDOFF_FILENAME = "HANDOFF.md";
-
 export function handoffTriggerSummary(usage: Usage | null | undefined): string {
   const reasons = gatewayReasons(usage);
   if (reasons.length === 0) return "Usage is below the gateway threshold.";
@@ -29,24 +27,8 @@ export function handoffTriggerSummary(usage: Usage | null | undefined): string {
   return `${parts.join("; ")}${leftovers.length > 0 ? `. Other window: ${leftovers.join(", ")}` : ""}.`;
 }
 
-export function buildHandoffPrompt(usage: Usage | null | undefined): string {
-  const trigger = handoffTriggerSummary(usage);
-  return [
-    `Usage gateway tripped: ${trigger}`,
-    `STOP starting new work. Write a handoff doc so another agent can take over this task with zero re-discovery.`,
-    ``,
-    `Save it to ${HANDOFF_FILENAME} in the workspace root, then output the full doc in chat.`,
-    ``,
-    `Include these sections:`,
-    `1. Goal — what the task is and what "done" means.`,
-    `2. Current state — where things stand right now.`,
-    `3. Done — completed steps with file paths and key decisions.`,
-    `4. Remaining — next steps in order, with exact commands/files where known.`,
-    `5. Key files — paths touched or to read first.`,
-    `6. Blockers / risks — anything uncertain, failing, or time-sensitive.`,
-    `7. How to resume — the first 3 actions the next agent should take.`,
-    `8. Verification — how to confirm the work (tests, commands, expected output).`,
-    ``,
-    `Keep it factual and specific. Reference real file paths, branch names, and test commands, not guesses.`,
-  ].join("\n");
+// Pull-based resume: the new agent reads the previous agent's timeline itself,
+// so no handoff doc needs to be generated before the old agent stops.
+export function buildResumePrompt(previousAgentId: string): string {
+  return `Use \`paseo logs ${previousAgentId}\` to read the previous agent's timeline. Identify the original goal, completed work, decisions, and remaining tasks. Inspect its repository, worktree, branch, and uncommitted changes, then continue the unfinished work. Verify the actual file state and test results before relying on claims in the timeline.`;
 }
