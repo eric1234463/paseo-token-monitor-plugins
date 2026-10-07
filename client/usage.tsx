@@ -1,5 +1,5 @@
 import { useAgent, usePaseo, useRpc } from "@getpaseo/plugin/client";
-import type { PluginButtonContentProps, PluginButtonIconProps } from "@getpaseo/plugin/client";
+import type { PluginButtonContentProps, PluginButtonIconProps, PluginSurfaceProps } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Pressable, Text, View } from "react-native";
@@ -19,11 +19,10 @@ function useSpeed(agentId: string, hostId: string) {
   });
 }
 
-function useUsage(agentId: string, hostId: string) {
+function useAccountUsage(hostId: string) {
   const paseo = usePaseo();
   const readClaude = useRpc(claudeUsageRpc);
-  const provider = useAgent(agentId, (agent) => agent.provider);
-  const query = useQuery({
+  return useQuery({
     queryKey: ["token-monitor", hostId],
     queryFn: async () => {
       const snapshot = await paseo.providers.listUsage();
@@ -39,8 +38,51 @@ function useUsage(agentId: string, hostId: string) {
     },
     staleTime: 60_000, refetchInterval: 60_000, retry: false,
   });
+}
+
+function useUsage(agentId: string, hostId: string) {
+  const provider = useAgent(agentId, (agent) => agent.provider);
+  const query = useAccountUsage(hostId);
   const id = provider ? providerId(provider) : null;
   return { ...query, provider: id, usage: query.data?.providers.find((usage) => usage.providerId === id) ?? null };
+}
+
+export function UsageOverview({ theme, layout, host }: PluginSurfaceProps) {
+  const query = useAccountUsage(host.id);
+  return (
+    <View style={{ gap: 12 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <Text style={{ color: theme.colors.foreground, fontSize: 24, fontWeight: "600" }}>Usage overview</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Refresh account usage" disabled={query.isFetching}
+          onPress={() => { void query.refetch(); }} style={{ padding: 10, borderRadius: 6, backgroundColor: theme.colors.surface2 }}>
+          <Text style={{ color: theme.colors.foreground }}>{query.isFetching ? "Refreshing…" : "Refresh usage"}</Text>
+        </Pressable>
+      </View>
+      <Text style={{ color: theme.colors.foregroundMuted }}>{host.label} · Account limits across chats · HKT (UTC+8)</Text>
+      {query.isPending ? <Text style={{ color: theme.colors.foregroundMuted }}>Loading account usage…</Text> : null}
+      {query.isError ? <Text accessibilityRole="alert" style={{ color: theme.colors.statusWarning }}>
+        Could not refresh account usage. Any values shown are the last known reading.
+      </Text> : null}
+      <View style={{ flexDirection: layout.compact ? "column" : "row", gap: 12 }}>
+        {([["codex", "Codex"], ["claude", "Claude"]] as const).map(([id, label]) => {
+          const usage = query.data?.providers.find((usage) => usage.providerId === id);
+          const { fiveHour, weekly } = quotaWindows(usage?.status === "available" ? usage : null);
+          return (
+            <View key={id} accessibilityLabel={`${label} account limits`}
+              style={{ flex: layout.compact ? undefined : 1, padding: 16, gap: 12, borderRadius: 8, backgroundColor: theme.colors.surface1 }}>
+              <Text style={{ color: theme.colors.foreground, fontSize: 18, fontWeight: "600" }}>{label}{usage?.planLabel ? ` · ${usage.planLabel}` : ""}</Text>
+              {!query.isPending && usage?.status !== "available" ? <Text style={{ color: theme.colors.foregroundMuted }}>
+                {usage?.error || "Usage is unavailable for this provider account."}
+              </Text> : null}
+              <WindowRow label="5-hour limit" window={fiveHour} theme={theme} />
+              <WindowRow label="Weekly limit" window={weekly} theme={theme} />
+              <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>Updated {formatHkt(usage?.fetchedAt ?? query.data?.fetchedAt)}</Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
 }
 
 export type UsageSection = "limits" | "tokens";

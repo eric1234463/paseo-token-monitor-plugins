@@ -62,6 +62,13 @@ Visible pills refresh them every five seconds without calling a provider API.
 
 ## Token history sidebar
 
+The **Token usage** sidebar page starts with an account usage overview showing
+Codex and Claude together: five-hour and weekly usage bars, remaining allowance,
+and reset times in HKT. Cards sit side by side on desktop and stack on compact
+clients. Refresh usage rechecks account limits; the overview shares the composer
+pills' query, 60-second refresh, and Claude fallback. Missing windows display
+`Not provided`, and failed refreshes mark retained readings as stale.
+
 Open **Token usage** in the sidebar and select the Codex, Claude, or Grok tab.
 Only the selected provider's model totals and coverage are shown; the date range
 is shared across tabs. The default **7 days** includes today and the preceding

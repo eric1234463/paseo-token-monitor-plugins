@@ -8,6 +8,7 @@ import type { HistoryReport, Period } from "../shared/history";
 import { formatHkt } from "../shared/usage";
 import type { SupportedProvider } from "../shared/usage";
 import { DailyTokenChart } from "./bar-chart";
+import { UsageOverview } from "./usage";
 
 const fields = [["input", "Input"], ["cacheInput", "Cache input"], ["totalInput", "Total input"], ["output", "Output"]] as const;
 const providers = [["codex", "Codex"], ["claude", "Claude"], ["grok", "Grok"]] as const;
@@ -70,6 +71,7 @@ export function TokenHistory({ theme, layout, host }: PluginSurfaceProps) {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface0 }}
       contentContainerStyle={{ padding: layout.compact ? 16 : 24, gap: 20 }}>
+      <UsageOverview theme={theme} layout={layout} host={host} />
       <View style={{ gap: 6 }}>
         <Text style={{ color: theme.colors.foreground, fontSize: 24, fontWeight: "600" }}>Token history</Text>
         <Text style={{ color: theme.colors.foregroundMuted }}>{host.label} · Local CLI sessions · HKT (UTC+8)</Text>
