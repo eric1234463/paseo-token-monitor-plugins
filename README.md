@@ -5,11 +5,6 @@ and account windows turn Codex, Claude, and Grok usage into readable numbers,
 and a pull-based resume prompt hands unfinished work to a new agent before an
 account limit is reached.
 
-The limits pill displays the remaining five-hour and weekly allowance
-(`5h N% · W N%`). Click it for
-usage bars, additional provider windows, and reset times in HKT (UTC+8).
-Missing windows display `Not provided`; they never imply zero usage or unlimited access.
-
 ## Screenshots
 
 Composer pills:
@@ -32,164 +27,53 @@ Cache popover:
 
 ![Cache popover](assets/cache.png)
 
-## Usage gateway and handoff
+## What the pills show
 
-The limits pill is a soft stop-line, not a send blocker (Paseo plugins cannot
-intercept sends or stop a running turn). It trips when the 5-hour window reaches
-90% used or the weekly window reaches 95% used: the pill label switches to `STOP …`
-with a red alert icon, and the limits popover shows a STOP warning with the triggering window,
-remaining allowance, and reset time in HKT.
+| Pill | Shows |
+| --- | --- |
+| `5h 100% · W 47%` | Remaining five-hour and weekly allowance, with reset times in HKT (UTC+8). Turns into a red `STOP` warning at 90% (5-hour) or 95% (weekly) used. |
+| `43.4tok/s` | Average output throughput of the last completed turn, including tool runs and waits. |
+| `Cache 4:32` | Prompt cache ratio of this chat, with a freshness countdown (5-minute idle TTL heuristic). |
+| `Ctx ~62.9K` | How much of this chat's context window is used. Click for a breakdown by message type. |
 
-The popover also has a **Copy resume prompt** button. It copies a pull-based resume
-prompt for the current agent: open a new agent, paste it, and the new agent reads
-this agent's timeline with `paseo logs <agent-id>`, identifies the goal, completed
-work, decisions, and remaining tasks, inspects the repository, worktree, branch,
-and uncommitted changes, then continues the unfinished work. Nothing needs to be
-generated before this agent stops, and the prompt itself costs no turn here.
+Clicking the limits pill opens the usage popover: usage bars, extra provider
+windows, and a **Copy resume prompt** button. Missing data shows `Not provided`,
+never zero.
 
-To start that handoff in reverse, the plugin also registers a **workspace header
-button** (`↺ Resume…`) rather than a composer pill. Composer pills carry an
-`agentId`, so they do not exist until an agent does — which is exactly the moment
-you want the resume prompt. A workspace-scoped header button needs only a
-`workspaceId`, so it is reachable while composing a new agent inside a workspace.
-Type the previous agent's id there and **Confirm** — it creates a new agent in the
-workspace with the resume prompt. Provider and model follow the previous agent with
-nothing to choose, or tap a provider row to switch (its default model applies) and
-then a model row to pick a specific model. Alternatively copy the prompt and paste
-it into a composer yourself. The new agent
-verifies actual file state and test results before relying on claims in the timeline.
+## Handoff before the limit hits
 
-The tokens pill shows average throughput (`27.6tok/s`).
-A separate cache pill shows `Cache 4:32`, updates every second, and shows
-`Cache Expired` when the idle TTL elapses or `Cache —` without a cache reading.
-Click it for the cache ratio and cache expiry details.
-The cache ratio is from this chat's latest reported token usage,
-updated through Paseo's agent subscription. This is separate from account limits
-and is not a cumulative chat average. Codex uses cached input / total input tokens
-(latest model request). Claude uses cache reads / (fresh input + cache reads)
-(latest reported turn); Paseo does not expose Claude's cache-write count, so these
-tokens are excluded. Grok's token normalization is not defined by the installed
-SDK, so its cache ratio is unavailable. Missing, zero-total, or invalid counters
-show `Not provided`, while a reported zero cache-read count shows `0%`.
+Paseo plugins cannot block a send or stop a running turn, so the plugin works as
+a soft stop-line plus a handoff:
 
-The Cache popover adds a Cache expiry countdown (`Expires in M:SS`) for Claude
-and Codex. It restarts on each agent update that reports usable cache counters
-and assumes a 5-minute idle TTL: after 5 minutes without cache activity it shows
-Expired. This is a client-side heuristic — Paseo does not expose the provider's
-real cache expiry timestamp — so treat it as a freshness hint, not a billing signal.
+- **Copy resume prompt** in the limits popover copies a prompt for a new agent.
+  The new agent reads the old agent's timeline with `paseo logs <agent-id>`,
+  inspects the repo, worktree, and uncommitted changes itself, then continues
+  the unfinished work.
+- **↺ Resume…** button in the workspace header does the same from the other
+  side: type the previous agent's id, confirm, and a new agent starts with the
+  resume prompt. Provider and model follow the previous agent.
 
-The tokens pill shows **Avg N tok/s** for the last completed turn. It divides
-all reported output tokens in that turn by the full elapsed
-time, including tool execution, permission waits, and provider latency. This is
-turn throughput, not pure model generation speed. The popover shows the output
-count, elapsed seconds, and completion time in HKT. A running, failed, canceled,
-or missing-data turn keeps the previous completed reading; the popover labels it
-**Last completed turn**. Without a usable completed reading, the pill shows `—tok/s`.
-Reloads restore saved readings for Claude, Codex, and Grok. Older Codex turns can
-also be recovered from local `task_complete` timestamps and `duration_ms`, including
-archived sessions. Older Claude/Grok turns without saved timing remain unavailable.
+## Token usage sidebar
 
-The daemon observes turn lifecycle events and reads only the matching local
-provider session's usage records, reusing the history counter normalization and
-deduplication. This includes every Codex request in the turn rather than just
-Paseo's last-request usage. Counts include provider-reported reasoning output
-when already included, and exclude input/cache tokens. Completed readings are
-saved atomically under `~/.cache/paseo-token-monitor-plugins/speed/`, matched by
-agent, provider, and session ID, with private file permissions. Only token counts,
-duration, completion time, and identifiers are saved; no chat content or credentials.
-Visible pills refresh them every five seconds without calling a provider API.
-
-## Token history sidebar
-
-The **Token usage** sidebar page starts with an account usage overview showing
-Codex and Claude together: five-hour and weekly usage bars, remaining allowance,
-and reset times in HKT. Cards sit side by side on desktop and stack on compact
-clients. Refresh usage rechecks account limits; the overview shares the composer
-pills' query, 60-second refresh, and Claude fallback. Missing windows display
-`Not provided`, and failed refreshes mark retained readings as stale.
-
-Open **Token usage** in the sidebar and select the Codex, Claude, or Grok tab.
-Only the selected provider's model totals and coverage are shown; the date range
-is shared across tabs. The default **7 days** includes today and the preceding
-six days in HKT; Previous/Next moves it by seven days. Daily selects one day,
-and Monthly selects a calendar month. Use Previous/Next period to browse history,
-or enter inclusive From/To dates (`YYYY-MM-DD`) and Apply range. Results are
-grouped by provider and model, with Input, Cache input, Total input, and Output.
-
-The 7-day and Monthly views include a daily stacked bar chart for the selected
-provider, combining all its models, with separate Input, Cache input, and Output
-segments and a color legend. Each day's total is **Total input + Output**; cache
-reads are already in Total input and are not added twice. Dates use HKT, and
-today's bar can still grow. Select a bar for its exact total and breakdown; narrow screens
-scroll horizontally. Empty days show zero only with readable source coverage;
-missing counters or incomplete coverage show `—`. A known total with a missing
-breakdown uses a gray bar. Totals reflect retained local
-logs, with the same deduplication and coverage limits as the model rows.
-
-- **Input** is non-cache-read input. For Claude it includes fresh input and cache
-  writes; for Codex/Grok it is total input minus cache reads.
-- **Cache input** is cache-read tokens. **Total input** is Input + Cache input.
-- **Output** uses the provider's reported output counter; reasoning tokens are
-  not added again when already included by the provider.
-- Claude reads assistant usage in local `projects/**/*.jsonl` and deduplicates
-  message IDs across streaming records and copied/forked logs.
-- Codex reads local `sessions/**/*.jsonl` and `archived_sessions/**/*.jsonl`, follows the reported model, and uses
-  changes in cumulative usage to avoid counting repeated token events. A first
-  reading uses last-request usage so inherited fork totals are not billed again.
-- Grok reads saved `sessions/**/usage.json`, using completed turns' `modelUsage`
-  rather than adding the session summary. Older sessions without this file are
-  unavailable. Codex/Grok records without request IDs use timestamp/model/token
-  fingerprints to deduplicate replayed records.
-
-History includes retained CLI logs on the selected daemon, including use outside
-Paseo. It is not an account billing report: deleted logs, other devices, custom
-provider homes, and unrecorded usage are excluded. File failures are shown as
-incomplete coverage; missing counters display Not provided rather than zero.
-Date attribution follows each log record's timestamp (Grok uses turn end time).
-
-The reader honors `CODEX_HOME`, `CLAUDE_CONFIG_DIR` / `CLAUDE_HOME`, and `GROK_HOME`,
-with the usual home-directory defaults. It does not read authentication files or
-send log contents to a provider. Only model names and token aggregates reach the
-client. Parsed usage records are cached in server memory by file mtime/size;
-Refresh history scans for changed files. Nothing is written to the source logs.
-
-## Data sources
-
-- Codex and Grok use the connected host's existing `providers.listUsage()` SDK API.
-  Paseo's `session` window is displayed as the five-hour limit, and its `weekly`
-  window as the weekly limit. Grok currently provides only a weekly window.
-- Claude uses the same SDK data when available. Otherwise the plugin's daemon
-  entry queries the Claude Code OAuth usage endpoint using the existing local
-  sign-in. It reads `.credentials.json` under `CLAUDE_CONFIG_DIR`, `CLAUDE_HOME`,
-  or `~/.claude`, then the `Claude Code-credentials` Keychain entry on macOS.
-  This endpoint is not a documented public Claude API contract and can change.
-- Usage belongs to the account configured on that daemon and includes other chats.
-  It is not a counter for the current conversation. Separate accounts selected
-  through custom provider environments are not detected by this plugin.
-- API-key billing and RPM/TPM are separate from subscription windows. A provider
-  without subscription usage data displays unavailable.
-
-Credentials stay in server memory and are sent only to Anthropic's usage endpoint.
-They are never included in RPC results, client bundles, files, or logs. The plugin
-does not refresh or change login credentials. If Claude sign-in has expired, open
-Claude Code on the daemon machine, run `/login`, then refresh the popover after
-one minute.
-
-Visible composer pills share one usage query per host and refresh every 60 seconds.
-The Claude fallback is also cached for 60 seconds to avoid duplicate requests.
-The popover's Refresh button rechecks the host; provider-side caches may still apply.
-On a transport failure, previously fetched readings are marked stale. Their reset
-time does not itself prove the allowance has refreshed.
+The **Token usage** sidebar page shows a Codex and Claude account overview, then
+per-provider tabs with model totals: input, cache input, total input, and
+output. The default range is the last 7 days in HKT, with daily, monthly, and
+custom date ranges, and a daily stacked bar chart for 7-day and monthly views.
 
 ## Install
 
 Requires Paseo daemon and client 0.11.0 or later with plugins enabled.
 
+From npm:
+
 ```sh
-npm install
-npm run typecheck
-npm test
-paseo plugin install /Users/eric/personal-project/paseo-token-monitor-plugins
+paseo plugin install npm:paseo-token-monitor-plugins
+```
+
+Or from this repository:
+
+```sh
+paseo plugin install <path-to-this-repo>
 ```
 
 Install on the daemon whose account usage you want to view. After editing source:
@@ -199,6 +83,18 @@ paseo plugin reload paseo-token-monitor-plugins
 paseo plugin ls paseo-token-monitor-plugins
 ```
 
-The plugin owns its directory observation and removes pills, subscriptions, and
-pending usage requests when unloaded. All UI uses React Native primitives and
-the active Paseo theme; compact clients show the popover as a sheet.
+## How it works, privacy, and limits
+
+- Codex and Grok usage comes from the connected host's usage API. Claude uses
+  the same data when available, otherwise the daemon calls the Claude Code
+  OAuth usage endpoint with the existing local sign-in (this endpoint is not a
+  documented public contract and can change).
+- Credentials stay in server memory and are sent only to Anthropic's usage
+  endpoint. They never appear in RPC results, client bundles, files, or logs.
+- History is computed from retained local CLI logs (`CODEX_HOME`,
+  `CLAUDE_CONFIG_DIR` / `CLAUDE_HOME`, and `GROK_HOME` are honored). Nothing is
+  written to the source logs; only model names and token aggregates reach the
+  client.
+- Account windows cover the whole configured account, including other chats.
+  This is not an account billing report: deleted logs, other devices, and
+  unrecorded usage are excluded.
