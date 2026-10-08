@@ -10,6 +10,28 @@ The limits pill displays the remaining five-hour and weekly allowance
 usage bars, additional provider windows, and reset times in HKT (UTC+8).
 Missing windows display `Not provided`; they never imply zero usage or unlimited access.
 
+## Screenshots
+
+Composer pills:
+
+![Composer pills](assets/pills.png)
+
+Usage popover with account windows:
+
+![Usage popover](assets/usage.png)
+
+Limits popover:
+
+![Limits popover](assets/limits.png)
+
+Context popover:
+
+![Context popover](assets/context.png)
+
+Cache popover:
+
+![Cache popover](assets/cache.png)
+
 ## Usage gateway and handoff
 
 The limits pill is a soft stop-line, not a send blocker (Paseo plugins cannot
