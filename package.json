@@ -14,7 +14,8 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs"
+    "test": "tsc -p tsconfig.test.json && node --test tests/*.test.cjs",
+    "prepublishOnly": "npm run typecheck && npm test"
   },
   "devDependencies": {
     "@getpaseo/plugin": "^0.11.1",
