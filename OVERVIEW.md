@@ -1,4 +1,4 @@
-Shows Codex, Claude, and Grok account usage and local token history inside Paseo. Composer pills show the remaining five-hour and weekly allowance with reset times, plus last-turn throughput and prompt cache state. A Token usage sidebar page shows the same account overview with per model history and a daily chart.
+Analyzes Codex, Claude, and Grok token usage inside Paseo and helps hand unfinished work to a new agent before an account limit is reached. Composer pills show the remaining five-hour and weekly allowance with reset times, last-turn throughput, and prompt cache state. A Token usage sidebar page shows the same account overview with per model history and a daily chart.
 
 Visible pills share one usage query per host and refresh every 60 seconds. History is computed from retained CLI logs on the selected daemon, so it reflects local logs rather than a billing report.
 

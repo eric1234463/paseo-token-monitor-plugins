@@ -1,6 +1,10 @@
-# Paseo Token Monitor
+# Paseo Token Analyst
 
-Shows chat composer pills for Codex, Claude, and Grok.
+Token analysis and a usage gateway for Paseo. Composer pills, per-model history,
+and account windows turn Codex, Claude, and Grok usage into readable numbers,
+and a pull-based resume prompt hands unfinished work to a new agent before an
+account limit is reached.
+
 The limits pill displays the remaining five-hour and weekly allowance
 (`5h N% · W N%`). Click it for
 usage bars, additional provider windows, and reset times in HKT (UTC+8).
@@ -157,7 +161,7 @@ time does not itself prove the allowance has refreshed.
 
 ## Install
 
-Requires Paseo daemon and client 0.10.0 or later with plugins enabled.
+Requires Paseo daemon and client 0.11.0 or later with plugins enabled.
 
 ```sh
 npm install
