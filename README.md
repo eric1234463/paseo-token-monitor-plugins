@@ -64,15 +64,19 @@ custom date ranges, and a daily stacked bar chart for 7-day and monthly views.
 
 Requires Paseo daemon and client 0.11.0 or later with plugins enabled.
 
-From npm:
-
 ```sh
 paseo plugin install npm:paseo-token-monitor-plugins
 ```
 
-Or from this repository:
+You can also paste `npm:paseo-token-monitor-plugins` into
+**Settings → Plugins → Plugin source** in the app.
+
+To work on the plugin source instead:
 
 ```sh
+npm install
+npm run typecheck
+npm test
 paseo plugin install <path-to-this-repo>
 ```
 
