@@ -33,20 +33,20 @@ then a model row to pick a specific model. Alternatively copy the prompt and pas
 it into a composer yourself. The new agent
 verifies actual file state and test results before relying on claims in the timeline.
 
-The tokens pill shows cache ratio and average throughput (`C80% 27.6tok/s`).
-A separate cache expiry pill shows `Cache 4:32`, updates every second, and shows
+The tokens pill shows average throughput (`27.6tok/s`).
+A separate cache pill shows `Cache 4:32`, updates every second, and shows
 `Cache Expired` when the idle TTL elapses or `Cache —` without a cache reading.
-Click it for cache expiry details.
-`C` means cache ratio, from this chat's latest reported token usage,
+Click it for the cache ratio and cache expiry details.
+The cache ratio is from this chat's latest reported token usage,
 updated through Paseo's agent subscription. This is separate from account limits
 and is not a cumulative chat average. Codex uses cached input / total input tokens
 (latest model request). Claude uses cache reads / (fresh input + cache reads)
 (latest reported turn); Paseo does not expose Claude's cache-write count, so these
 tokens are excluded. Grok's token normalization is not defined by the installed
 SDK, so its cache ratio is unavailable. Missing, zero-total, or invalid counters
-show `C—`, while a reported zero cache-read count shows `C0%`.
+show `Not provided`, while a reported zero cache-read count shows `0%`.
 
-The Tokens popover adds a Cache expiry countdown (`Expires in M:SS`) for Claude
+The Cache popover adds a Cache expiry countdown (`Expires in M:SS`) for Claude
 and Codex. It restarts on each agent update that reports usable cache counters
 and assumes a 5-minute idle TTL: after 5 minutes without cache activity it shows
 Expired. This is a client-side heuristic — Paseo does not expose the provider's

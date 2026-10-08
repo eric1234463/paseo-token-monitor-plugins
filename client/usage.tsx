@@ -88,13 +88,12 @@ export function UsageOverview({ theme, layout, host }: PluginSurfaceProps) {
 
 export type UsageSection = "limits" | "tokens";
 
-export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection; cacheStore: CacheStore; onLabel(label: string): void }) {
+export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection; onLabel(label: string): void }) {
   const agentId = props.context === "agent" ? props.agentId : "";
   const { usage, isPending, isError } = useUsage(agentId, props.host.id);
   const speed = useSpeed(agentId, props.host.id);
-  const cacheState = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
   const tripped = props.section === "limits" && !isPending && !isError && isGatewayTripped(usage?.status === "available" ? usage : null);
-  const label = props.section === "tokens" ? tokenPillLabel(cacheState.ratio, speed.isError ? null : speed.data?.tokensPerSecond ?? null)
+  const label = props.section === "tokens" ? tokenPillLabel(speed.isError ? null : speed.data?.tokensPerSecond ?? null)
     : isPending ? "Limits…" : isError ? "Limits stale" : gatewayPillLabel(usage);
   useEffect(() => props.onLabel(label), [label, props.onLabel]);
   const glyph = props.section === "limits" ? (tripped ? "\u26A0" : "◷") : "↯";
@@ -107,7 +106,7 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
       </View>
     );
   }
-  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Cache and average throughput"}>{glyph}</Text>;
+  return <Text style={{ color: props.color, fontSize: props.size }} accessibilityLabel={props.section === "limits" ? "Account limits" : "Average throughput"}>{glyph}</Text>;
 }
 
 export function CacheIcon(props: PluginButtonIconProps & { cacheStore: CacheStore; onLabel(label: string): void }) {
@@ -225,18 +224,26 @@ function GatewayWarning({ usage, agentId, theme }: { usage: Usage | null; agentI
   );
 }
 
-export function CachePopover({ theme, layout, cacheStore }: PluginButtonContentProps & { cacheStore: CacheStore }) {
-  return <View style={{ width: layout.compact ? "100%" : 320 }}>
+export function CachePopover({ theme, layout, cacheStore, ...context }: PluginButtonContentProps & { cacheStore: CacheStore }) {
+  const agentId = context.context === "agent" ? context.agentId : "";
+  const provider = useAgent(agentId, (agent) => agent.provider);
+  const id = provider ? providerId(provider) : null;
+  const cache = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot).ratio;
+  return <View style={{ width: layout.compact ? "100%" : 320, gap: 12 }}>
+    <View style={{ gap: 6 }}>
+      <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Cache ratio · {cache === null ? "Not provided" : `${Math.round(cache)}%`}</Text>
+      <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
+        Latest reported usage in this chat.{id === "claude" ? " Cache reads / (fresh input + cache reads); excludes cache writes." : id === "codex" ? " Cached input / total input tokens." : " Cache token semantics are not provided for this provider."}
+      </Text>
+    </View>
     <CacheExpiry cacheStore={cacheStore} theme={theme} />
   </View>;
 }
 
-export function UsagePopover({ theme, layout, host, cacheStore, section, ...context }: PluginButtonContentProps & { section: UsageSection; cacheStore: CacheStore }) {
+export function UsagePopover({ theme, layout, host, section, ...context }: PluginButtonContentProps & { section: UsageSection }) {
   const agentId = context.context === "agent" ? context.agentId : "";
-  const { usage, provider, isPending, isFetching, isError, refetch, data } = useUsage(agentId, host.id);
+  const { usage, isPending, isFetching, isError, refetch, data } = useUsage(agentId, host.id);
   const speed = useSpeed(agentId, host.id);
-  const cacheState = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot);
-  const cache = cacheState.ratio;
   const { fiveHour, weekly } = quotaWindows(usage?.status === "available" ? usage : null);
   const extras = usage?.status === "available" ? usage.windows.filter((window) => window !== fiveHour && window !== weekly) : [];
   return (
@@ -258,13 +265,6 @@ export function UsagePopover({ theme, layout, host, cacheStore, section, ...cont
       {usage?.sourceLabel ? <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>{usage.sourceLabel}</Text> : null}
       </> : <>
       <View style={{ gap: 6 }}>
-        <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>Cache ratio · {cache === null ? "Not provided" : `${Math.round(cache)}%`}</Text>
-        <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
-          Latest reported usage in this chat.{provider === "claude" ? " Cache reads / (fresh input + cache reads); excludes cache writes." : provider === "codex" ? " Cached input / total input tokens." : " Cache token semantics are not provided for this provider."}
-        </Text>
-      </View>
-      <CacheExpiry cacheStore={cacheStore} theme={theme} />
-      <View style={{ gap: 6 }}>
         <Text style={{ color: theme.colors.foreground, fontWeight: "600" }}>{speedLabel(speed.isError ? null : speed.data?.tokensPerSecond ?? null)}</Text>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
           Output tokens / full turn time, including tool and permission waits.
@@ -283,7 +283,7 @@ export function UsagePopover({ theme, layout, host, cacheStore, section, ...cont
       </>}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12, flex: 1 }}>
-          {section === "limits" ? `Updated ${formatHkt(usage?.fetchedAt ?? data?.fetchedAt)}` : "C = cache ratio · tok/s = Avg output"}
+          {section === "limits" ? `Updated ${formatHkt(usage?.fetchedAt ?? data?.fetchedAt)}` : "tok/s = Avg output"}
         </Text>
         <Pressable accessibilityRole="button" accessibilityLabel="Refresh provider usage" disabled={isFetching || speed.isFetching}
           onPress={() => { void refetch(); void speed.refetch(); }} style={{ padding: 8, borderRadius: 6, backgroundColor: theme.colors.surface2 }}>

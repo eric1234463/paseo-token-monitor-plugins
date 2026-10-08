@@ -26,11 +26,11 @@ test("a provider error cannot turn an old reading into a current quota", () => {
 });
 
 test("separate labels preserve unknown and zero metrics within the host's compact pill width", () => {
-  assert.equal(tokenPillLabel(null, null), "C— —tok/s");
-  assert.equal(tokenPillLabel(0, 0), "C0% 0tok/s");
-  assert.equal(tokenPillLabel(80, 27.56), "C80% 27.6tok/s");
-  for (const cache of [null, 0, 100]) for (const speed of [null, 0, 9.99, 99.99, 999, 12345]) {
-    assert.ok(tokenPillLabel(cache, speed).length <= 14);
+  assert.equal(tokenPillLabel(null), "—tok/s");
+  assert.equal(tokenPillLabel(0), "0tok/s");
+  assert.equal(tokenPillLabel(27.56), "27.6tok/s");
+  for (const speed of [null, 0, 9.99, 99.99, 999, 12345]) {
+    assert.ok(tokenPillLabel(speed).length <= 14);
   }
 });
 

@@ -83,11 +83,11 @@ export function pillLabel(usage: Usage | null | undefined): string {
   return `5h ${percentage(fiveHour)} · W ${percentage(weekly)}`;
 }
 
-export function tokenPillLabel(cache: number | null, speed: number | null): string {
+export function tokenPillLabel(speed: number | null): string {
   const rate = speed === null ? "—" : new Intl.NumberFormat("en-US", {
     notation: "compact", maximumFractionDigits: speed < 100 ? 1 : 0,
   }).format(speed);
-  return `C${cache === null ? "—" : `${Math.round(cache)}%`} ${rate}tok/s`;
+  return `${rate}tok/s`;
 }
 
 export function cachePillLabel(remainingMs: number | null): string {

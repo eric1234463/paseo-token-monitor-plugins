@@ -47,16 +47,16 @@ export default function contribute(client: PluginClientContext) {
     const registrations = (["limits", "tokens", "cache", "context"] as const).map((section) => {
       let registration: PluginButtonRegistration;
       const onLabel = (label: string) => registration?.update({ label });
-      const titles = { limits: "Provider usage limits", tokens: "Cache ratio and average tokens per second", cache: "Prompt cache expiry", context: "Context window breakdown" };
+      const titles = { limits: "Provider usage limits", tokens: "Average tokens per second", cache: "Prompt cache expiry", context: "Context window breakdown" };
       const labels = { limits: "Limits…", tokens: "Tokens…", cache: "Cache…", context: "Context…" };
       const Icon = section === "context"
         ? (props: PluginButtonIconProps) => <ContextIcon {...props} onLabel={onLabel} />
         : section === "cache" ? (props: PluginButtonIconProps) => <CacheIcon {...props} cacheStore={cacheStore} onLabel={onLabel} />
-        : (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} cacheStore={cacheStore} onLabel={onLabel} />;
+        : (props: PluginButtonIconProps) => <UsageIcon {...props} section={section} onLabel={onLabel} />;
       const Content = section === "context"
         ? (props: PluginButtonContentProps) => <ContextPopover {...props} />
         : section === "cache" ? (props: PluginButtonContentProps) => <CachePopover {...props} cacheStore={cacheStore} />
-        : (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} cacheStore={cacheStore} />;
+        : (props: PluginButtonContentProps) => <UsagePopover {...props} section={section} />;
       registration = client.addComposerPill({
         id: `usage-${section}`, workspaceId, agentId: agent.id,
         button: { title: titles[section], label: labels[section], icon: Icon, behavior: { kind: "popover", Content } },
