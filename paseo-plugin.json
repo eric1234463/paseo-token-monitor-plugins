@@ -2,6 +2,13 @@
   "id": "paseo-token-monitor-plugins",
   "name": "Token analyst",
   "description": "Analyze Codex, Claude, and Grok token usage and hand off work to a new agent before account limits are reached.",
+  "media": [
+    "assets/pills.png",
+    "assets/usage.png",
+    "assets/limits.png",
+    "assets/context.png",
+    "assets/cache.png"
+  ],
   "requirements": {
     "paseo": ">=0.11.0"
   }
