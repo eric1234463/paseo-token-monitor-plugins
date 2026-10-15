@@ -10,6 +10,18 @@ import type { Usage, UsageWindow } from "../shared/usage";
 import { buildResumePrompt, handoffTriggerSummary } from "../shared/handoff";
 import type { CacheStore } from "./cache";
 import { speedLabel, speedRpc } from "../shared/speed";
+import { ONE_HOUR_CACHE_TTL_MS, cacheTtlRpc } from "../shared/cache";
+
+function useCacheTtl(agentId: string, hostId: string, updatedAtMs: number | null) {
+  const readTtl = useRpc(cacheTtlRpc);
+  // Keyed on the reading time so each new request re-reads the tier it wrote.
+  const query = useQuery({
+    queryKey: ["token-cache-ttl", hostId, agentId, updatedAtMs],
+    queryFn: () => readTtl({ agentId }),
+    enabled: Boolean(agentId) && updatedAtMs !== null, staleTime: Infinity, retry: false,
+  });
+  return query.data?.ttlMs ?? null;
+}
 
 function useSpeed(agentId: string, hostId: string) {
   const readSpeed = useRpc(speedRpc);
@@ -111,8 +123,9 @@ export function UsageIcon(props: PluginButtonIconProps & { section: UsageSection
 
 export function CacheIcon(props: PluginButtonIconProps & { cacheStore: CacheStore; onLabel(label: string): void }) {
   const cacheState = useSyncExternalStore(props.cacheStore.subscribe, props.cacheStore.getSnapshot, props.cacheStore.getSnapshot);
+  const ttlMs = useCacheTtl(props.context === "agent" ? props.agentId : "", props.host.id, cacheState.updatedAtMs) ?? PROMPT_CACHE_TTL_MS;
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const remainingMs = cacheState.ratio === null ? null : cacheRemainingMs(cacheState.updatedAtMs, nowMs);
+  const remainingMs = cacheState.ratio === null ? null : cacheRemainingMs(cacheState.updatedAtMs, nowMs, ttlMs);
   const ticking = remainingMs !== null && remainingMs > 0;
   useEffect(() => {
     if (!ticking) return;
@@ -150,14 +163,17 @@ function WindowRow({ label, window, theme }: { label: string; window: UsageWindo
   );
 }
 
-function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: PluginButtonContentProps["theme"] }) {
+function CacheExpiry({ cacheStore, theme, agentId, hostId }: { cacheStore: CacheStore; theme: PluginButtonContentProps["theme"]; agentId: string; hostId: string }) {
   const state = useSyncExternalStore(cacheStore.subscribe, cacheStore.getSnapshot, cacheStore.getSnapshot);
+  const detectedTtlMs = useCacheTtl(agentId, hostId, state.updatedAtMs);
+  const ttlMs = detectedTtlMs ?? PROMPT_CACHE_TTL_MS;
+  const ttlWord = ttlMs === ONE_HOUR_CACHE_TTL_MS ? "1-hour" : "5-min";
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
-  const remainingMs = cacheRemainingMs(state.updatedAtMs, nowMs);
+  const remainingMs = cacheRemainingMs(state.updatedAtMs, nowMs, ttlMs);
   if (state.ratio === null || remainingMs === null || state.updatedAtMs === null) {
     return (
       <View style={{ gap: 6 }}>
@@ -169,7 +185,7 @@ function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: Plu
     );
   }
   const expired = remainingMs <= 0;
-  const pct = expired ? 0 : Math.max(0, Math.min(100, remainingMs / PROMPT_CACHE_TTL_MS * 100));
+  const pct = expired ? 0 : Math.max(0, Math.min(100, remainingMs / ttlMs * 100));
   const color = expired ? theme.colors.statusDanger : remainingMs < 60_000 ? theme.colors.statusWarning : theme.colors.accent;
   return (
     <View style={{ gap: 6 }}>
@@ -180,14 +196,14 @@ function CacheExpiry({ cacheStore, theme }: { cacheStore: CacheStore; theme: Plu
         </Text>
       </View>
       <View accessibilityRole="progressbar" accessibilityLabel="Prompt cache expiry"
-        accessibilityValue={expired ? { text: "Expired" } : { min: 0, max: 300, now: Math.ceil(remainingMs / 1000), text: `Expires in ${formatCountdown(remainingMs)}` }}
+        accessibilityValue={expired ? { text: "Expired" } : { min: 0, max: ttlMs / 1000, now: Math.ceil(remainingMs / 1000), text: `Expires in ${formatCountdown(remainingMs)}` }}
         style={{ height: 6, borderRadius: 3, backgroundColor: theme.colors.surface2, overflow: "hidden" }}>
         {expired ? null : <View style={{ height: 6, width: `${pct}%`, backgroundColor: color }} />}
       </View>
       <Text style={{ color: theme.colors.foregroundMuted, fontSize: 12 }}>
         {expired
-          ? `Idle over 5 min — next request starts fresh. Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())}.`
-          : `Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())} · 5-min idle TTL (heuristic).`}
+          ? `Idle past the ${ttlWord} TTL — next request starts fresh. Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())}.`
+          : `Last activity ${formatHkt(new Date(state.updatedAtMs).toISOString())} · ${ttlWord} idle TTL (${detectedTtlMs === null ? "heuristic" : "from session log"}).`}
       </Text>
     </View>
   );
@@ -224,7 +240,7 @@ function GatewayWarning({ usage, agentId, theme }: { usage: Usage | null; agentI
   );
 }
 
-export function CachePopover({ theme, layout, cacheStore, ...context }: PluginButtonContentProps & { cacheStore: CacheStore }) {
+export function CachePopover({ theme, layout, host, cacheStore, ...context }: PluginButtonContentProps & { cacheStore: CacheStore }) {
   const agentId = context.context === "agent" ? context.agentId : "";
   const provider = useAgent(agentId, (agent) => agent.provider);
   const id = provider ? providerId(provider) : null;
@@ -236,7 +252,7 @@ export function CachePopover({ theme, layout, cacheStore, ...context }: PluginBu
         Latest reported usage in this chat.{id === "claude" ? " Cache reads / (fresh input + cache reads); excludes cache writes." : id === "codex" ? " Cached input / total input tokens." : " Cache token semantics are not provided for this provider."}
       </Text>
     </View>
-    <CacheExpiry cacheStore={cacheStore} theme={theme} />
+    <CacheExpiry cacheStore={cacheStore} theme={theme} agentId={agentId} hostId={host.id} />
   </View>;
 }
 

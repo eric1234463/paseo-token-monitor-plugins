@@ -13,14 +13,14 @@ import type { SupportedProvider } from "../shared/usage";
 import { createSpeedStore } from "./speed-store";
 
 type Roots = Record<SupportedProvider, string> & { codexArchive?: string };
-const defaultRoots: Roots = {
+export const defaultRoots: Roots = {
   codex: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "sessions"),
   codexArchive: join(process.env.CODEX_HOME ?? join(homedir(), ".codex"), "archived_sessions"),
   claude: join(process.env.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_HOME ?? join(homedir(), ".claude"), "projects"),
   grok: join(process.env.GROK_HOME ?? join(homedir(), ".grok"), "sessions"),
 };
 
-async function sessionFile(provider: SupportedProvider, sessionId: string, signal: AbortSignal, roots: Roots) {
+export async function sessionFile(provider: SupportedProvider, sessionId: string, signal: AbortSignal, roots: Roots) {
   if (!/^[a-zA-Z0-9_-]{1,200}$/.test(sessionId)) return null;
   const directories = provider === "codex" && roots.codexArchive ? [roots.codex, roots.codexArchive] : [roots[provider]];
   for (const directory of directories) for await (const path of files(directory, provider)) {

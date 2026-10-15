@@ -110,7 +110,7 @@ export function formatHkt(timestamp: string | null | undefined): string {
   return `${day} ${month}, ${hour}:${minute} HKT`;
 }
 
-// SHORTCUT: fixed 5-min idle TTL; per-model/extended-cache TTLs if providers expose them.
+// SHORTCUT: fixed 5-min fallback for providers without a logged cache tier (Claude reads it via cacheTtlRpc); per-provider TTLs if others expose them.
 export const PROMPT_CACHE_TTL_MS = 5 * 60 * 1000;
 
 export function cacheRemainingMs(updatedAtMs: number | null | undefined, nowMs: number, ttlMs = PROMPT_CACHE_TTL_MS): number | null {
