@@ -6,6 +6,8 @@ import { historyRpc } from "./shared/history";
 import { createContextReader } from "./server/context";
 import { contextBreakdownRpc } from "./shared/context";
 import { registerSpeed } from "./server/speed";
+import { createCacheTtlReader } from "./server/cache";
+import { cacheTtlRpc } from "./shared/cache";
 
 export default function contribute(server: PluginServerContext) {
   const lifetime = new AbortController();
@@ -13,6 +15,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(claudeUsageRpc, readClaude);
   server.handle(historyRpc, createHistoryReader(lifetime.signal));
   server.handle(contextBreakdownRpc, createContextReader(lifetime.signal));
+  server.handle(cacheTtlRpc, createCacheTtlReader(lifetime.signal));
   const releaseSpeed = registerSpeed(server, lifetime.signal);
   return () => { lifetime.abort(); releaseSpeed(); };
 }
